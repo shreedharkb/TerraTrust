@@ -1,0 +1,31 @@
+{
+  "project": "TerraTrust",
+  "region": "Davangere District, Karnataka",
+  "data_sources": {
+    "boundaries": {
+      "source": "KGIS (kgis.ksrsac.in)",
+      "files": [
+        "District.shp",
+        "Taluk.shp"
+      ]
+    },
+    "soil": {
+      "source": "ISRIC SoilGrids v2.0",
+      "url": "https://rest.isric.org/soilgrids/v2.0/",
+      "note": "250m resolution global soil maps"
+    },
+    "climate": {
+      "source": "NASA POWER v2.0",
+      "url": "https://power.larc.nasa.gov/",
+      "note": "Satellite-derived, 2020-2024"
+    }
+  },
+  "taluks": [
+    "Harihar",
+    "Jagaluru",
+    "Davanagere",
+    "Honnali",
+    "Channagiri",
+    "Nyamati"
+  ]
+}
