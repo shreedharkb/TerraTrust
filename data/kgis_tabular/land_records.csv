@@ -1,7 +1,0 @@
-Taluk,declared_crop,historical_yield,repayment_history_years,farm_area_acres,loan_amount_lakhs,crop_health_label,soil_suitability_label,credit_risk_label,credit_score
-Davanagere,Maize,18.5,3,4.5,5.0,Healthy,Suitable,Low Risk,82.5
-Harihara,Paddy,22.0,4,3.2,4.0,Healthy,Suitable,Low Risk,88.2
-Jagalur,Cotton,8.5,1,6.0,3.5,Stressed,Unsuitable,High Risk,31.0
-Honnali,Paddy,24.5,5,4.0,4.8,Healthy,Suitable,Low Risk,91.5
-Channagiri,Arecanut,12.0,2,2.5,6.5,Moderate,Marginal,Medium Risk,52.4
-Nyamathi,Maize,16.0,3,3.8,4.2,Moderate,Marginal,Medium Risk,58.0
