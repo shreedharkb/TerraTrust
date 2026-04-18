@@ -85,13 +85,13 @@ def fetch_soil_data(lat, lon):
     return None
 
 
-def fetch_climate_data(lat, lon):
-    """Fetch genuine climate data from NASA POWER API."""
+def fetch_climate_data(lat, lon, year_str):
+    """Fetch genuine climate data from NASA POWER API for a specific year."""
     params = {
         "parameters": "PRECTOTCORR,T2M,T2M_MAX,T2M_MIN,RH2M,ALLSKY_SFC_SW_DWN,GWETROOT",
         "community": "AG",
         "longitude": lon, "latitude": lat,
-        "start": "2020", "end": "2024",  # Year-only format
+        "start": year_str, "end": year_str,  # Year-only format
         "format": "JSON"
     }
     try:
@@ -146,6 +146,18 @@ def run_full_data_pipeline():
 
     # Generate exact real points
     points_df = generate_sample_points(taluks_gdf, points_per_polygon=10)
+    
+    # Expand to multi-year schema
+    expanded_points = []
+    for _, row in points_df.iterrows():
+        for year in [2019, 2020, 2021, 2022, 2023]:
+            pt = row.to_dict()
+            pt['year'] = year
+            pt['point_id_yr'] = f"{pt['point_id']}_{year}"
+            expanded_points.append(pt)
+    
+    expanded_df = pd.DataFrame(expanded_points)
+    print(f"  Expanded spatio-temporal dataframe to {len(expanded_df)} rows.")
 
     # Step 3: Fetch genuine soil data from ISRIC SoilGrids
     print("\n" + "=" * 60)
@@ -154,6 +166,7 @@ def run_full_data_pipeline():
     print("=" * 60)
     
     soil_records = []
+    # Soil is static historically so we only fetch it once per spatial coordinate
     for _, row in points_df.iterrows():
         name = row['taluk']
         pid = row['point_id']
@@ -191,13 +204,14 @@ def run_full_data_pipeline():
     print("=" * 60)
     
     climate_records = []
-    for _, row in points_df.iterrows():
+    for _, row in expanded_df.iterrows():
         name = row['taluk']
-        pid = row['point_id']
+        pid_yr = row['point_id_yr']
         lat, lon = row['latitude'], row['longitude']
-        print(f"  {pid} ({lat:.4f}N, {lon:.4f}E)...", end=" ")
+        year_str = str(row['year'])
+        print(f"  {pid_yr} ({lat:.4f}N, {lon:.4f}E)...", end=" ")
         
-        climate = fetch_climate_data(lat, lon)
+        climate = fetch_climate_data(lat, lon, year_str)
         if climate and len(climate) > 0:
             precip = [v for v in climate.get('PRECTOTCORR', {}).values() if v != -999 and v is not None]
             temp = [v for v in climate.get('T2M', {}).values() if v != -999 and v is not None]
@@ -205,21 +219,20 @@ def run_full_data_pipeline():
             wet = [v for v in climate.get('GWETROOT', {}).values() if v != -999 and v is not None]
             
             rec = {
-                'point_id': pid, 'taluk': name, 'latitude': lat, 'longitude': lon,
+                'point_id_yr': pid_yr, 'year': int(year_str),
                 'avg_monthly_rainfall_mm': round(np.mean(precip), 2) if precip else None,
-                'total_annual_rainfall_mm': round(np.sum(precip[-12:]), 2) if len(precip) >= 12 else None,
+                'total_annual_rainfall_mm': round(np.sum(precip), 2) if precip else None,
                 'avg_temperature_c': round(np.mean(temp), 2) if temp else None,
                 'avg_humidity_pct': round(np.mean(hum), 2) if hum else None,
                 'avg_root_zone_wetness': round(np.mean(wet), 4) if wet else None,
-                'rainfall_trend': 'Stable' if precip and np.std(precip[-24:]) < 50 else 'Variable',
                 'api_source': 'NASA POWER v2.0',
             }
             climate_records.append(rec)
             print("OK")
         else:
             print("FAILED")
-            climate_records.append({'point_id': pid, 'taluk': name, 'latitude': lat, 'longitude': lon})
-        time.sleep(0.5)
+            climate_records.append({'point_id_yr': pid_yr, 'year': int(year_str)})
+        time.sleep(0.3)
     
     climate_df = pd.DataFrame(climate_records)
     climate_df.to_csv(os.path.join(TABULAR_DIR, "davangere_climate_data.csv"), index=False)
@@ -230,26 +243,21 @@ def run_full_data_pipeline():
     print("STEP 5: Building Master Dataset")
     print("=" * 60)
     
-    master = points_df.copy()
+    master = expanded_df.copy()
     
     # Merge soil
     soil_merge = soil_df[[c for c in soil_df.columns if c not in ['latitude', 'longitude', 'taluk', 'api_source', 'api_url']]]
     master = master.merge(soil_merge, on='point_id', how='left')
     
-    # Load and merge external attributes (groundwater, land records)
-    gw_path = os.path.join(TABULAR_DIR, "groundwater.csv")
-    lr_path = os.path.join(TABULAR_DIR, "land_records.csv")
+    # Merge climate
+    climate_merge = climate_df[[c for c in climate_df.columns if c not in ['api_source', 'api_url', 'year']]]
+    master = master.merge(climate_merge, on='point_id_yr', how='left')
     
+    # Load and merge external attributes (groundwater only)
+    gw_path = os.path.join(TABULAR_DIR, "groundwater.csv")
     if os.path.exists(gw_path):
         gw_df = pd.read_csv(gw_path)
         master = master.merge(gw_df, on='taluk', how='left')
-        
-    if os.path.exists(lr_path):
-        lr_df = pd.read_csv(lr_path)
-        master = master.merge(lr_df, on='taluk', how='left')
-    else:
-        # Fallback if file doesn't exist
-        master['declared_crop'] = 'Maize'
     
     # Compute scores
     master['soil_suitability_score'] = master.apply(_soil_score, axis=1)

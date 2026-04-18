@@ -1,8 +1,7 @@
 """
 TerraTrust Credit Scorer
 =========================
-The Visual Credit Score engine that combines all ML model outputs
-into a final 0-100 credit risk score with supporting evidence.
+Deterministc Heuristic Scoring Engine based on Satellite ML.
 """
 
 import os
@@ -18,13 +17,7 @@ from src.config import *
 
 class VisualCreditScorer:
     """
-    Generates a Visual Credit Score for a farmer/farm plot.
-    
-    The score is a weighted combination of:
-    - Crop Health Score (30%) - from NDVI-based ML model
-    - Water Availability Score (25%) - from climate + groundwater ML model
-    - Soil Suitability Score (25%) - from soil + crop match ML model
-    - Historical Trend Score (20%) - from NDVI time-series stability
+    Generates a Visual Credit Score using a deterministic heuristic algorithm.
     """
     
     def __init__(self):
@@ -32,184 +25,64 @@ class VisualCreditScorer:
         self.load_models()
     
     def load_models(self):
-        """Load all trained ML models."""
-        model_files = {
-            'crop_health': 'crop_health_model.pkl',
-            'soil_suitability': 'soil_suitability_model.pkl',
-            'water_availability': 'water_availability_model.pkl',
-            'credit_scorer': 'credit_scorer_model.pkl',
-        }
-        
-        for key, filename in model_files.items():
-            path = os.path.join(MODELS_DIR, filename)
-            if os.path.exists(path):
-                self.models[key] = joblib.load(path)
-                print(f"  ✅ Loaded {key} model")
-            else:
-                print(f"  ⚠️ {key} model not found at {path}")
-    
-    def predict_crop_health(self, farm_data):
-        """Predict crop health using the trained classifier."""
-        if 'crop_health' not in self.models:
-            return {'label': 'Unknown', 'score': 50, 'confidence': 0}
-        
-        artifacts = self.models['crop_health']
-        model = artifacts['model']
-        scaler = artifacts['scaler']
-        le = artifacts['label_encoder']
-        features = artifacts['features']
-        
-        X = np.array([[farm_data.get(f, 0) for f in features]])
-        X_scaled = scaler.transform(X)
-        
-        pred = model.predict(X_scaled)[0]
-        label = le.inverse_transform([pred])[0]
-        
-        # Get probability if available
-        if hasattr(model, 'predict_proba'):
-            proba = model.predict_proba(X_scaled)[0]
-            confidence = float(max(proba))
+        """Load the NDVI Predictor."""
+        path = os.path.join(MODELS_DIR, "ndvi_predictor_model.pkl")
+        if os.path.exists(path):
+            self.models['ndvi_predictor'] = joblib.load(path)
+            print(f"  ✅ Loaded NDVI Predictor model")
         else:
-            confidence = 0.8
-        
-        # Convert label to score
-        score_map = {'Healthy': 85, 'Moderate': 55, 'Stressed': 25}
-        score = score_map.get(label, 50)
-        
-        return {'label': label, 'score': score, 'confidence': round(confidence, 3)}
+            print(f"  ⚠️ NDVI Predictor model not found at {path}")
     
-    def predict_soil_suitability(self, farm_data):
-        """Predict soil suitability using the trained classifier."""
-        if 'soil_suitability' not in self.models:
-            return {'label': 'Unknown', 'score': 50, 'confidence': 0}
-        
-        artifacts = self.models['soil_suitability']
-        model = artifacts['model']
-        scaler = artifacts['scaler']
-        le = artifacts['label_encoder']
-        crop_le = artifacts['crop_encoder']
-        features = artifacts['features']
-        
-        # Encode crop
-        crop = farm_data.get('declared_crop', 'Maize')
-        try:
-            crop_encoded = crop_le.transform([crop])[0]
-        except ValueError:
-            crop_encoded = 0
-        
-        farm_data_copy = farm_data.copy()
-        farm_data_copy['crop_encoded'] = crop_encoded
-        
-        X = np.array([[farm_data_copy.get(f, 0) for f in features]])
-        X_scaled = scaler.transform(X)
-        
-        pred = model.predict(X_scaled)[0]
-        label = le.inverse_transform([pred])[0]
-        
-        if hasattr(model, 'predict_proba'):
-            proba = model.predict_proba(X_scaled)[0]
-            confidence = float(max(proba))
-        else:
-            confidence = 0.8
-        
-        score_map = {'Suitable': 90, 'Marginal': 55, 'Unsuitable': 20}
-        score = score_map.get(label, 50)
-        
-        return {'label': label, 'score': score, 'confidence': round(confidence, 3)}
-    
-    def predict_water_availability(self, farm_data):
-        """Predict water availability using the trained regressor."""
-        if 'water_availability' not in self.models:
-            return {'score': 50, 'label': 'Unknown'}
-        
-        artifacts = self.models['water_availability']
-        model = artifacts['model']
-        scaler = artifacts['scaler']
-        features = artifacts['features']
-        
-        X = np.array([[farm_data.get(f, 0) for f in features]])
-        X_scaled = scaler.transform(X)
-        
-        score = float(model.predict(X_scaled)[0])
-        score = max(0, min(100, score))
-        
-        if score >= 70:
-            label = 'Good'
-        elif score >= 45:
-            label = 'Moderate'
-        else:
-            label = 'Poor'
-        
-        return {'score': round(score, 1), 'label': label}
-    
-    def compute_historical_trend_score(self, farm_data):
-        """Compute historical trend score from NDVI time series."""
-        # Load time series if available
-        ts_path = os.path.join(SATELLITE_DIR, "ndvi_timeseries.csv")
-        if os.path.exists(ts_path):
-            ts = pd.read_csv(ts_path)
-            ndvi_values = ts['ndvi_mean'].values
+    def predict_ndvi(self, farm_data):
+        """Predict NDVI from Ground Features using XGBoost."""
+        if 'ndvi_predictor' not in self.models:
+            return farm_data.get('ndvi', 0.45)
             
-            if len(ndvi_values) > 2:
-                # Trend slope
-                x = np.arange(len(ndvi_values))
-                slope = np.polyfit(x, ndvi_values, 1)[0]
-                
-                # Stability (low std = good)
-                stability = 1 - min(1, np.std(ndvi_values) / 0.3)
-                
-                # Score: positive trend + high stability = good
-                trend_score = 50 + slope * 500 + stability * 30
-                trend_score = max(0, min(100, trend_score))
-                
-                direction = 'Improving' if slope > 0.001 else ('Declining' if slope < -0.001 else 'Stable')
-                
-                return {
-                    'score': round(trend_score, 1),
-                    'trend_direction': direction,
-                    'slope': round(slope, 6),
-                    'stability': round(stability, 3)
-                }
+        artifacts = self.models['ndvi_predictor']
+        model = artifacts['model']
+        scaler = artifacts['scaler']
+        features = artifacts['features']
         
-        return {'score': 50, 'trend_direction': 'Insufficient Data', 'slope': 0, 'stability': 0.5}
-    
+        X = np.array([[farm_data.get(f, 0) for f in features]])
+        try:
+            X_scaled = scaler.transform(X)
+            pred = model.predict(X_scaled)[0]
+            return float(np.clip(pred, 0, 1))
+        except:
+            return farm_data.get('ndvi', 0.45)
+            
+    def compute_soil_score(self, farm_data):
+        """Deterministic score based on Soil pH and Nitrogen."""
+        ph = farm_data.get('pH', 7.0)
+        nitrogen = farm_data.get('nitrogen_g_per_kg', 0)
+        
+        # Optimal pH 6.0 to 7.5
+        ph_score = 100 - abs(6.5 - ph) * 20
+        n_score = min(100, nitrogen * 50)
+        
+        return max(0, min(100, (ph_score + n_score) / 2))
+        
     def generate_credit_score(self, farm_data):
         """
         Generate the complete Visual Credit Score with supporting evidence.
-        
-        Returns a comprehensive dict containing:
-        - Final credit score (0-100)
-        - Risk category and recommendation
-        - Individual component scores
-        - Supporting evidence
+        Uses deterministic weighting:
+        40% - ML Predicted NDVI 
+        30% - Groundwater Depth (KGIS)
+        30% - Soil Suitability (KGIS)
         """
-        # Get individual component scores
-        crop_health = self.predict_crop_health(farm_data)
-        soil_suit = self.predict_soil_suitability(farm_data)
-        water = self.predict_water_availability(farm_data)
-        trend = self.compute_historical_trend_score(farm_data)
         
-        # Weighted combination fallback removed! Now pulling true ML predictions.
-        # Ensure we use the actual ensembled ML regressor trained in models.py
-        if 'credit_scorer' in self.models:
-            artifacts = self.models['credit_scorer']
-            model = artifacts['model']
-            scaler = artifacts['scaler']
-            features = artifacts['features']
-            
-            X = np.array([[farm_data.get(f, 0) for f in features]])
-            X_scaled = scaler.transform(X)
-            final_score = float(model.predict(X_scaled)[0])
-        else:
-            # Fallback if no model is loaded
-            weights = CREDIT_SCORE_WEIGHTS
-            final_score = (
-                crop_health['score'] * weights.get('crop_health', 0.3) +
-                water['score'] * weights.get('water_availability', 0.25) +
-                soil_suit['score'] * weights.get('soil_suitability', 0.25) +
-                trend['score'] * weights.get('historical_trend', 0.2)
-            )
-            
+        # Get components
+        predicted_ndvi = self.predict_ndvi(farm_data)
+        soil_score = self.compute_soil_score(farm_data)
+        
+        gw_m = farm_data.get('groundwater_depth_m', 20)
+        if pd.isna(gw_m): gw_m = 20
+        # Optimal groundwater is < 10m
+        gw_score = max(0, min(100, 100 - (gw_m - 10) * 3))
+        
+        # Calculate Heuristic Credit Score
+        ndvi_score = predicted_ndvi * 100
+        final_score = (ndvi_score * 0.40) + (gw_score * 0.30) + (soil_score * 0.30)
         final_score = round(max(0, min(100, final_score)), 1)
         
         # Risk category
@@ -220,41 +93,35 @@ class VisualCreditScorer:
                 break
         
         # Generate recommendation
-        if final_score >= 75:
-            recommendation = "APPROVE - Strong agricultural indicators support loan viability."
-        elif final_score >= 50:
-            recommendation = "REVIEW - Moderate risk. Additional field verification recommended."
+        if final_score >= 70:
+            recommendation = "APPROVE - Strong physical agricultural capacity."
+        elif final_score >= 45:
+            recommendation = "REVIEW - Marginal physical indicators."
         else:
-            recommendation = "REJECT - High risk indicators. Suggest crop/soil advisory before reapplication."
+            recommendation = "REJECT - Poor physical crop capacity."
         
         result = {
-            'farm_id': farm_data.get('farm_id', 'UNKNOWN'),
+            'point_id_yr': farm_data.get('point_id_yr', 'UNKNOWN'),
+            'year': farm_data.get('year', 2023),
             'taluk': farm_data.get('taluk', 'Unknown'),
-            'declared_crop': farm_data.get('declared_crop', 'Unknown'),
-            'loan_amount_lakhs': farm_data.get('loan_amount_lakhs', 0),
             
-            'credit_score': final_score,
+            'heuristic_credit_score': final_score,
             'risk_category': risk_category,
             'recommendation': recommendation,
             
             'components': {
-                'crop_health': crop_health,
-                'soil_suitability': soil_suit,
-                'water_availability': water,
-                'historical_trend': trend,
+                'predicted_ndvi_score': round(ndvi_score, 1),
+                'groundwater_score': round(gw_score, 1),
+                'soil_score': round(soil_score, 1)
             },
             
-            'ml_model_used': 'credit_scorer' in self.models,
-            
             'evidence': {
-                'ndvi_value': farm_data.get('ndvi', None),
-                'ndwi_value': farm_data.get('ndwi', None),
+                'ml_predicted_ndvi': round(predicted_ndvi, 3),
+                'actual_satellite_ndvi': round(farm_data.get('ndvi', 0), 3) if not pd.isna(farm_data.get('ndvi')) else None,
                 'soil_ph': farm_data.get('pH', None),
                 'nitrogen': farm_data.get('nitrogen_g_per_kg', None),
-                'rainfall': farm_data.get('avg_monthly_rainfall_mm', None),
+                'rainfall_mm': farm_data.get('avg_monthly_rainfall_mm', None),
                 'groundwater_depth': farm_data.get('groundwater_depth_m', None),
-                'historical_yield': farm_data.get('historical_yield', None),
-                'repayment_history_years': farm_data.get('repayment_history_years', None),
                 'coordinates': {
                     'lat': farm_data.get('latitude', None),
                     'lon': farm_data.get('longitude', None)
@@ -265,9 +132,9 @@ class VisualCreditScorer:
         return result
     
     def score_all_farms(self, farms_df):
-        """Score all farms in the dataset and return results."""
+        """Score all coordinates in the dataset and return results."""
         print("\n" + "=" * 60)
-        print("  Scoring All Farms - Visual Credit Score Engine")
+        print("  Scoring All Data Points - Heuristic Credit Engine")
         print("=" * 60)
         
         results = []
@@ -275,46 +142,30 @@ class VisualCreditScorer:
             farm_data = row.to_dict()
             score_result = self.generate_credit_score(farm_data)
             results.append({
-                'farm_id': score_result['farm_id'],
+                'point_id_yr': score_result['point_id_yr'],
+                'year': score_result['year'],
                 'taluk': score_result['taluk'],
-                'declared_crop': score_result['declared_crop'],
-                'credit_score': score_result['credit_score'],
+                'heuristic_credit_score': score_result['heuristic_credit_score'],
                 'risk_category': score_result['risk_category'],
-                'crop_health_score': score_result['components']['crop_health']['score'],
-                'crop_health_label': score_result['components']['crop_health']['label'],
-                'soil_score': score_result['components']['soil_suitability']['score'],
-                'soil_label': score_result['components']['soil_suitability']['label'],
-                'water_score': score_result['components']['water_availability']['score'],
-                'water_label': score_result['components']['water_availability']['label'],
-                'trend_score': score_result['components']['historical_trend']['score'],
                 'recommendation': score_result['recommendation'],
-                'latitude': farm_data.get('latitude'),
-                'longitude': farm_data.get('longitude'),
+                'predicted_ndvi': score_result['evidence']['ml_predicted_ndvi'],
+                'latitude': score_result['evidence']['coordinates']['lat'],
+                'longitude': score_result['evidence']['coordinates']['lon'],
             })
         
         results_df = pd.DataFrame(results)
         
         # Save results
-        results_path = os.path.join(PROCESSED_DIR, "credit_scores.csv")
+        results_path = os.path.join(PROCESSED_DIR, "heuristic_credit_scores.csv")
         results_df.to_csv(results_path, index=False)
-        print(f"\n  ✅ Scored {len(results_df)} farms")
+        print(f"\n  ✅ Scored {len(results_df)} temporal coordinates")
         print(f"  💾 Saved to: {results_path}")
-        
-        # Summary
-        print(f"\n  Risk Distribution:")
-        for cat, count in results_df['risk_category'].value_counts().items():
-            pct = count / len(results_df) * 100
-            print(f"    {cat}: {count} ({pct:.1f}%)")
-        
-        print(f"\n  Average Credit Score: {results_df['credit_score'].mean():.1f}")
-        print(f"  Score Range: {results_df['credit_score'].min():.1f} - {results_df['credit_score'].max():.1f}")
         
         return results_df
 
 
 def run_credit_scoring():
     """Run the credit scoring pipeline."""
-    # Load authentic dataset
     df_path = os.path.join(PROCESSED_DIR, "davangere_master_dataset.csv")
     if not os.path.exists(df_path):
         print("❌ Dataset not found. Run data_pipeline.py first.")
@@ -330,10 +181,10 @@ def run_credit_scoring():
         sample_farm = df.iloc[0].to_dict()
         detailed = scorer.generate_credit_score(sample_farm)
         
-        report_path = os.path.join(PROCESSED_DIR, "sample_credit_report.json")
+        report_path = os.path.join(PROCESSED_DIR, "sample_heuristic_report.json")
         with open(report_path, 'w') as f:
             json.dump(detailed, f, indent=2, default=str)
-        print(f"\n  💾 Sample detailed report saved to: {report_path}")
+        print(f"\n  💾 Sample heuristic report saved to: {report_path}")
     
     return results
 
