@@ -45,21 +45,21 @@ def load_genuine_dataset():
     master = pd.read_csv(master_path)
     print(f"  Loaded genuine master dataset: {master.shape}")
     
-    # In a real environment, ndvi varies per point. 
-    # If using aggregated Sentinel-2 results, we simulate spatial noise to represent intra-taluk variance accurately, 
-    # but since we deleted static assignments, we use the actual ndvi columns or generate raw physical variants from true bounds.
     if os.path.exists(ndvi_path):
         ndvi_df = pd.read_csv(ndvi_path)
-        # Merge by taluk or point if available. For our dataset, assume point_id_yr or use regional means with noise.
-        # Here we just inject synthetic variance based on true NASA rainfall and ISRIC soil for honest ML scaling.
-        master['ndvi'] = 0.35 + (master.get('avg_monthly_rainfall_mm', 50) / 500) + (master.get('organic_carbon_dg_per_kg', 30) / 1000)
-        master['ndvi'] = master['ndvi'] + np.random.normal(0, 0.05, len(master))
-        master['ndvi'] = master['ndvi'].clip(0, 1)
+        
+        # Group real satellite data by year taking the mean of recorded scenes in that year
+        yearly_ndvi = ndvi_df.groupby('year')['ndvi_mean'].mean().reset_index()
+        yearly_ndvi.rename(columns={'ndvi_mean': 'ndvi'}, inplace=True)
+        
+        # Merge exactly against the year dimensions mapping strict real inputs
+        master = master.merge(yearly_ndvi, on='year', how='left')
+        
+        # Strictly drop missing values preventing any faked data
+        master = master.dropna(subset=['ndvi'])
     else:
-        # Honest temporal proxy calculation strictly from ground truths based on physical correlation if satellite fetch failed
-        master['ndvi'] = 0.35 + (master.get('avg_monthly_rainfall_mm', 50) / 500) + (master.get('organic_carbon_dg_per_kg', 30) / 1000)
-        master['ndvi'] = master['ndvi'] + np.random.normal(0, 0.05, len(master))
-        master['ndvi'] = master['ndvi'].clip(0, 1)
+        print("  ❌ Critical: NDVI Timeseries not found. Cannot construct target variables.")
+        return None
         
     df = master
     print(f"\n  ✅ Loaded strict spatial dataset: {df.shape}")
