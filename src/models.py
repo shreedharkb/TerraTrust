@@ -36,7 +36,7 @@ def load_genuine_dataset():
     print("=" * 60)
     
     master_path = os.path.join(PROCESSED_DIR, "davangere_master_dataset.csv")
-    ndvi_path = os.path.join(SATELLITE_DIR, "ndvi_data.csv")
+    ndvi_path = os.path.join(SATELLITE_DIR, "ndvi_timeseries.csv")
     
     if not os.path.exists(master_path):
         print("  ❌ Master dataset not found. Run data_pipeline.py first.")
