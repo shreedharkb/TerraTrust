@@ -9,6 +9,7 @@ Trains a single regressor that maps KGIS physical ground properties
 import os
 import sys
 import json
+import time
 import joblib
 import numpy as np
 import pandas as pd
@@ -35,7 +36,7 @@ def load_genuine_dataset():
     print("Loading 100% Genuine Dataset for ML Training")
     print("=" * 60)
     
-    master_path = os.path.join(PROCESSED_DIR, "davangere_master_dataset.csv")
+    master_path = os.path.join(PROCESSED_DIR, "karnataka_master_dataset.csv")
     ndvi_path = os.path.join(SATELLITE_DIR, "ndvi_timeseries.csv")
     
     if not os.path.exists(master_path):
@@ -78,6 +79,7 @@ def train_ndvi_predictor(df):
     print("\n" + "=" * 60)
     print("MODEL: NDVI Predictor (Ground-to-Satellite ML Mapping)")
     print("=" * 60)
+    t0 = time.time()
     
     features = ['clay_pct', 'sand_pct', 'pH', 'avg_monthly_rainfall_mm', 'groundwater_depth_m']
     target = 'ndvi'
@@ -97,10 +99,11 @@ def train_ndvi_predictor(df):
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    # XGBoost Regressor
+    # XGBoost Regressor (RTX 3050 GPU-accelerated)
     model = XGBRegressor(
         n_estimators=300, max_depth=6, learning_rate=0.05,
-        random_state=42, reg_alpha=0.1, reg_lambda=1.0
+        random_state=42, reg_alpha=0.1, reg_lambda=1.0,
+        tree_method='gpu_hist', device='cuda'
     )
     model.fit(X_train_scaled, y_train)
     pred = model.predict(X_test_scaled)
@@ -141,6 +144,7 @@ def train_ndvi_predictor(df):
     model_path = os.path.join(MODELS_DIR, "ndvi_predictor_model.pkl")
     joblib.dump(model_artifacts, model_path)
     print(f"  💾 Saved honest predictive model to: {model_path}")
+    print(f"  ⏱️  NDVI Predictor trained in {time.time()-t0:.2f}s")
     
     return model_artifacts
 
@@ -157,6 +161,7 @@ def train_soil_classifier(df):
     print("\n" + "=" * 60)
     print("MODEL: Soil Suitability Classifier")
     print("=" * 60)
+    t0 = time.time()
     
     features = ['pH', 'nitrogen_g_per_kg', 'clay_pct', 'sand_pct', 'silt_pct']
     
@@ -212,6 +217,7 @@ def train_soil_classifier(df):
     model_path = os.path.join(MODELS_DIR, "soil_classifier_model.pkl")
     joblib.dump(model_artifacts, model_path)
     print(f"  💾 Saved soil classifier model to: {model_path}")
+    print(f"  ⏱️  Soil Classifier trained in {time.time()-t0:.2f}s")
     
     return model_artifacts
 
@@ -227,6 +233,7 @@ def train_water_regressor(df):
     print("\n" + "=" * 60)
     print("MODEL: Water Availability Regressor")
     print("=" * 60)
+    t0 = time.time()
     
     features = ['avg_monthly_rainfall_mm', 'groundwater_depth_m', 'avg_root_zone_wetness', 'avg_humidity_pct']
     target = 'water_availability_score'
@@ -249,7 +256,7 @@ def train_water_regressor(df):
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.05, random_state=42)
+    model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.05, random_state=42, tree_method='gpu_hist', device='cuda')
     model.fit(X_train_scaled, y_train)
     pred = model.predict(X_test_scaled)
     
@@ -268,6 +275,7 @@ def train_water_regressor(df):
     model_path = os.path.join(MODELS_DIR, "water_regressor_model.pkl")
     joblib.dump(model_artifacts, model_path)
     print(f"  💾 Saved water regressor model to: {model_path}")
+    print(f"  ⏱️  Water Regressor trained in {time.time()-t0:.2f}s")
     
     return model_artifacts
 
@@ -284,6 +292,7 @@ def train_credit_risk_classifier(df):
     print("\n" + "=" * 60)
     print("MODEL: Credit Risk Classifier (Final Decision Engine)")
     print("=" * 60)
+    t0 = time.time()
 
     features = ['ndvi', 'soil_suitability_score', 'water_availability_score', 'farm_size']
     target   = 'repayment_status'
@@ -315,7 +324,7 @@ def train_credit_risk_classifier(df):
         n_estimators=200, max_depth=5, learning_rate=0.05,
         scale_pos_weight=scale_pos_weight,
         use_label_encoder=False, eval_metric='logloss',
-        random_state=42
+        random_state=42, tree_method='gpu_hist', device='cuda'
     )
     model.fit(X_train_scaled, y_train)
     pred      = model.predict(X_test_scaled)
@@ -343,6 +352,7 @@ def train_credit_risk_classifier(df):
     model_path = os.path.join(MODELS_DIR, "credit_risk_classifier_model.pkl")
     joblib.dump(model_artifacts, model_path)
     print(f"  💾 Saved credit risk classifier to: {model_path}")
+    print(f"  ⏱️  Credit Risk Classifier trained in {time.time()-t0:.2f}s")
     return model_artifacts
 
 
@@ -385,8 +395,9 @@ def save_metrics_report(ndvi_model, soil_model, water_model, credit_model=None):
 
 def run_model_training():
     """Execute the complete model training pipeline."""
+    total_start = time.time()
     print("\n" + "=" * 60)
-    print("  TerraTrust ML Training Pipeline")
+    print("  TerraTrust ML Training Pipeline (RTX 3050 GPU)")
     print("=" * 60)
     
     # Step 1: Load Strict Genuine Dataset
@@ -405,6 +416,7 @@ def run_model_training():
     
     print("\n" + "=" * 60)
     print("  ✅ ML PIPELINE EXECUTED STRICTLY UNDER ACADEMIC CONSTRAINTS")
+    print(f"  ⏱️  Total training time: {time.time()-total_start:.2f}s")
     print("=" * 60)
     print(json.dumps(report, indent=2))
     

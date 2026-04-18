@@ -254,7 +254,7 @@ class VisualCreditScorer:
 
 def run_credit_scoring():
     """Run the credit scoring pipeline."""
-    df_path = os.path.join(PROCESSED_DIR, "davangere_master_dataset.csv")
+    df_path = os.path.join(PROCESSED_DIR, "karnataka_master_dataset.csv")
     if not os.path.exists(df_path):
         print("❌ Dataset not found. Run data_pipeline.py first.")
         return

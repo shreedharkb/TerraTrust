@@ -213,9 +213,11 @@ def run_full_data_pipeline():
     print(f"  Expanded spatio-temporal dataframe to {len(expanded_df)} rows.")
 
     # Step 3: Fetch genuine soil data from ISRIC SoilGrids
+    step3_start = time.time()
     print("\n" + "=" * 60)
     print("STEP 3: Fetching Soil Data from ISRIC SoilGrids API")
     print("  Source: https://rest.isric.org/soilgrids/v2.0/")
+    print(f"  Points to fetch: {len(points_df)}")
     print("=" * 60)
     
     soil_records = []
@@ -247,13 +249,17 @@ def run_full_data_pipeline():
         time.sleep(0.5)
     
     soil_df = pd.DataFrame(soil_records)
-    soil_df.to_csv(os.path.join(TABULAR_DIR, "davangere_soil_data.csv"), index=False)
-    print(f"  Saved: data/kgis_tabular/davangere_soil_data.csv ({len(soil_df)} rows)")
+    soil_df.to_csv(os.path.join(TABULAR_DIR, "karnataka_soil_data.csv"), index=False)
+    step3_elapsed = time.time() - step3_start
+    print(f"  Saved: data/kgis_tabular/karnataka_soil_data.csv ({len(soil_df)} rows)")
+    print(f"  ⏱️  Step 3 completed in {step3_elapsed:.1f}s")
 
     # Step 4: Fetch climate data from NASA POWER
+    step4_start = time.time()
     print("\n" + "=" * 60)
     print("STEP 4: Fetching Climate Data from NASA POWER API")
     print("  Source: https://power.larc.nasa.gov/")
+    print(f"  Records to fetch: {len(expanded_df)}")
     print("=" * 60)
     
     climate_records = []
@@ -288,10 +294,13 @@ def run_full_data_pipeline():
         time.sleep(0.3)
     
     climate_df = pd.DataFrame(climate_records)
-    climate_df.to_csv(os.path.join(TABULAR_DIR, "davangere_climate_data.csv"), index=False)
-    print(f"  Saved: data/kgis_tabular/davangere_climate_data.csv ({len(climate_df)} rows)")
+    climate_df.to_csv(os.path.join(TABULAR_DIR, "karnataka_climate_data.csv"), index=False)
+    step4_elapsed = time.time() - step4_start
+    print(f"  Saved: data/kgis_tabular/karnataka_climate_data.csv ({len(climate_df)} rows)")
+    print(f"  ⏱️  Step 4 completed in {step4_elapsed:.1f}s")
 
     # Step 5: Build master dataset
+    step5_start = time.time()
     print("\n" + "=" * 60)
     print("STEP 5: Building Master Dataset")
     print("=" * 60)
@@ -333,8 +342,10 @@ def run_full_data_pipeline():
     # Generate and merge synthetic bank records (physics-driven for ML training)
     master = generate_synthetic_bank_records(master)
 
-    master.to_csv(os.path.join(PROCESSED_DIR, "davangere_master_dataset.csv"), index=False)
+    master.to_csv(os.path.join(PROCESSED_DIR, "karnataka_master_dataset.csv"), index=False)
+    step5_elapsed = time.time() - step5_start
     print(f"  Master dataset: {master.shape}")
+    print(f"  ⏱️  Step 5 completed in {step5_elapsed:.1f}s")
     print(master.head().to_string())
 
     # Save GeoJSON for all Karnataka
