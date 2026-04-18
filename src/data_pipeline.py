@@ -18,49 +18,47 @@ from src.config import *
 
 
 def load_district_boundary():
-    """Load KGIS District shapefile, extract Davangere, reproject to WGS84."""
+    """Load KGIS District shapefile for ALL Karnataka districts, reproject to WGS84."""
     print("=" * 60)
-    print("STEP 1: Loading KGIS District Shapefile")
+    print("STEP 1: Loading KGIS District Shapefile (All Karnataka)")
     print("=" * 60)
     gdf = gpd.read_file(DISTRICT_SHP)
     if gdf.crs and not gdf.crs.is_geographic:
         gdf = gdf.to_crs(epsg=4326)
-    
-    davangere = gdf[gdf['KGISDist_1'].astype(str).str.contains('|'.join(TARGET_DISTRICT_ALT), case=False, na=False)].copy()
-    if davangere.empty:
-        raise ValueError("Davangere district not found!")
-    
-    bounds = davangere.geometry.total_bounds
-    c = davangere.geometry.centroid.iloc[0]
-    print(f"  Found Davangere | BBox: [{bounds[0]:.4f}, {bounds[1]:.4f}, {bounds[2]:.4f}, {bounds[3]:.4f}]")
-    print(f"  Centroid: ({c.y:.4f}N, {c.x:.4f}E)")
-    return davangere, bounds
+
+    # No district filter — return ALL districts in Karnataka
+    gdf = gdf[gdf.geometry.notna()].copy()
+    bounds = gdf.geometry.total_bounds
+    print(f"  Loaded {len(gdf)} Karnataka districts | BBox: [{bounds[0]:.4f}, {bounds[1]:.4f}, {bounds[2]:.4f}, {bounds[3]:.4f}]")
+    return gdf, bounds
 
 
 def load_taluk_boundaries():
-    """Load KGIS Taluk shapefile, extract ONLY Davangere's 6 taluks."""
+    """Load KGIS Taluk shapefile for ALL Karnataka taluks, reproject to WGS84."""
     print("\n" + "=" * 60)
-    print("STEP 2: Loading KGIS Taluk Shapefile")
+    print("STEP 2: Loading KGIS Taluk Shapefile (All Karnataka)")
     print("=" * 60)
     gdf = gpd.read_file(TALUK_SHP)
     if gdf.crs and not gdf.crs.is_geographic:
         gdf = gdf.to_crs(epsg=4326)
-    
-    # Davangere district code is '14' in the KGIS shapefile
-    # Filter: district code 14 AND taluk name is not null (excludes the district-level row)
-    davangere_taluks = gdf[(gdf['KGISDistri'] == '14') & (gdf['KGISTalukN'].notna())].copy()
-    
-    if davangere_taluks.empty:
-        raise ValueError("No Davangere taluks found with KGISDistri=14!")
-    
-    davangere_taluks['centroid_lat'] = davangere_taluks.geometry.centroid.y
-    davangere_taluks['centroid_lon'] = davangere_taluks.geometry.centroid.x
-    
-    print(f"  Found {len(davangere_taluks)} Davangere taluks:")
-    for _, r in davangere_taluks.iterrows():
-        print(f"    {r['KGISTalukN']:15s} ({r['centroid_lat']:.4f}N, {r['centroid_lon']:.4f}E)")
-    
-    return davangere_taluks
+
+    # No district filter — include all taluks with a valid name
+    all_taluks = gdf[gdf['KGISTalukN'].notna()].copy()
+
+    if all_taluks.empty:
+        raise ValueError("No taluks found in shapefile!")
+
+    all_taluks['centroid_lat'] = all_taluks.geometry.centroid.y
+    all_taluks['centroid_lon'] = all_taluks.geometry.centroid.x
+
+    # Derive a 'district' column from KGISDistri code if available, else empty
+    if 'KGISDist_1' in all_taluks.columns:
+        all_taluks['district'] = all_taluks['KGISDist_1'].fillna('Unknown')
+    else:
+        all_taluks['district'] = 'Unknown'
+
+    print(f"  Loaded {len(all_taluks)} taluks across Karnataka.")
+    return all_taluks
 
 
 def get_retry_session():
@@ -121,35 +119,78 @@ def generate_sample_points(gdf, points_per_polygon=10):
     """Generate random physical coordinates strictly inside the valid real boundaries."""
     print(f"\n  Generating a dense grid of {points_per_polygon} real geographic points per Taluk...")
     points = []
-    np.random.seed(42) # Consistent grid
-    
+    np.random.seed(42)  # Consistent grid
+
     for idx, row in gdf.iterrows():
         poly = row['geometry']
-        taluk_name = row['KGISTalukN']
+        taluk_name = row.get('KGISTalukN', f'T{idx}')
+        district_name = row.get('district', row.get('KGISDist_1', 'Unknown'))
         minx, miny, maxx, maxy = poly.bounds
-        
+
         count = 0
-        while count < points_per_polygon:
+        attempts = 0
+        while count < points_per_polygon and attempts < points_per_polygon * 50:
             pnt = Point(np.random.uniform(minx, maxx), np.random.uniform(miny, maxy))
+            attempts += 1
             if poly.contains(pnt):
                 points.append({
+                    'district': district_name,
                     'taluk': taluk_name,
                     'point_id': f"{taluk_name[:3].upper()}_{count:03d}",
                     'latitude': pnt.y,
                     'longitude': pnt.x
                 })
                 count += 1
-                
+
     points_df = pd.DataFrame(points)
     print(f"  Generated {len(points_df)} strict real coordinate locations.")
     return points_df
 
 
+def generate_synthetic_bank_records(df):
+    """
+    Generate synthetic bank/financial records for ML training of the credit risk classifier.
+    Columns: farm_size (acres), historical_yield (quintals/acre), repayment_status (binary).
+    Repayment risk is physics-driven: poor soil/water/NDVI conditions raise default probability.
+    """
+    print("\n" + "=" * 60)
+    print("STEP: Generating Synthetic Bank Records (Physics-Driven)")
+    print("=" * 60)
+    rng = np.random.default_rng(42)
+
+    n = len(df)
+
+    # Farm size: 1–15 acres, log-normal distribution (small farms are most common)
+    farm_size = np.clip(rng.lognormal(mean=1.2, sigma=0.7, size=n), 1.0, 15.0).round(1)
+
+    # Historical yield: correlated with soil and water scores; adds noise
+    soil_score  = df.get('soil_suitability_score',  pd.Series(np.full(n, 70.0))).fillna(70.0).values
+    water_score = df.get('water_availability_score', pd.Series(np.full(n, 60.0))).fillna(60.0).values
+    yield_base  = 0.05 * soil_score + 0.04 * water_score  # ~9 quintals at average scores
+    historical_yield = np.clip(yield_base + rng.normal(0, 1.5, size=n), 0.5, 30.0).round(2)
+
+    # Repayment status: 1 = good repayment, 0 = default
+    # Default probability rises as soil/water/farm capacity falls
+    ndvi_score  = df.get('ndvi', pd.Series(np.full(n, 0.45))).fillna(0.45).values * 100
+    composite   = 0.4 * ndvi_score + 0.3 * soil_score + 0.3 * water_score  # 0-100
+    prob_repay  = np.clip(composite / 100.0, 0.05, 0.95)
+    repayment_status = rng.binomial(1, prob_repay, size=n)
+
+    df = df.copy()
+    df['farm_size']          = farm_size
+    df['historical_yield']   = historical_yield
+    df['repayment_status']   = repayment_status
+
+    good = repayment_status.sum()
+    print(f"  Generated {n} records — {good} good repayments ({good/n*100:.1f}%), {n-good} defaults.")
+    return df
+
+
 def run_full_data_pipeline():
-    """Execute the complete data pipeline with genuine APIs."""
+    """Execute the complete data pipeline with genuine APIs (All Karnataka)."""
     print("\n" + "=" * 60)
     print("  TerraTrust Data Pipeline — 100% Genuine Data")
-    print("  Target: Davangere District, Karnataka")
+    print("  Target: All Karnataka Districts")
     print("=" * 60)
 
     # Step 1 & 2: Load boundaries
@@ -288,30 +329,34 @@ def run_full_data_pipeline():
     # Compute scores
     master['soil_suitability_score'] = master.apply(_soil_score, axis=1)
     master['water_availability_score'] = master.apply(_water_score, axis=1)
-    
+
+    # Generate and merge synthetic bank records (physics-driven for ML training)
+    master = generate_synthetic_bank_records(master)
+
     master.to_csv(os.path.join(PROCESSED_DIR, "davangere_master_dataset.csv"), index=False)
     print(f"  Master dataset: {master.shape}")
-    print(master.to_string())
-    
-    # Save GeoJSON
-    district_gdf.to_file(os.path.join(PROCESSED_DIR, "davangere_district.geojson"), driver="GeoJSON")
-    taluks_gdf.to_file(os.path.join(PROCESSED_DIR, "davangere_taluks.geojson"), driver="GeoJSON")
+    print(master.head().to_string())
+
+    # Save GeoJSON for all Karnataka
+    district_gdf.to_file(os.path.join(PROCESSED_DIR, "karnataka_districts.geojson"), driver="GeoJSON")
+    taluks_gdf.to_file(os.path.join(PROCESSED_DIR, "karnataka_taluks.geojson"), driver="GeoJSON")
     
     # Save provenance
     provenance = {
         "project": "TerraTrust",
-        "region": "Davangere District, Karnataka",
+        "region": "Karnataka State, India",
         "data_sources": {
             "boundaries": {"source": "KGIS (kgis.ksrsac.in)", "files": ["District.shp", "Taluk.shp"]},
             "soil": {"source": "ISRIC SoilGrids v2.0", "url": "https://rest.isric.org/soilgrids/v2.0/", "note": "250m resolution global soil maps"},
             "climate": {"source": "NASA POWER v2.0", "url": "https://power.larc.nasa.gov/", "note": "Satellite-derived, 2020-2024"},
         },
-        "taluks": list(master['taluk'].values),
+        "districts": list(master['district'].unique()) if 'district' in master.columns else [],
+        "taluks": list(master['taluk'].unique()),
     }
     with open(os.path.join(DATA_DIR, "data_provenance.json"), 'w') as f:
         json.dump(provenance, f, indent=2)
     
-    print("\n  DATA PIPELINE COMPLETE")
+    print("\n  DATA PIPELINE COMPLETE — All Karnataka")
     return master, district_gdf, taluks_gdf
 
 

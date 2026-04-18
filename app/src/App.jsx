@@ -21,8 +21,8 @@ const App = () => {
   const [trendData, setTrendData] = useState([]);
 
   useEffect(() => {
-    // Load GeoJSON Boundaries
-    fetch('/data/davangere_taluks.geojson')
+    // Load GeoJSON Boundaries (All Karnataka)
+    fetch('/data/karnataka_districts.geojson')
       .then((res) => res.json())
       .then((data) => setGeoData(data));
 
@@ -137,7 +137,7 @@ const App = () => {
           </div>
           <div className="px-4 text-center">
             <p className="text-xs text-slate-400">Region</p>
-            <p className="text-sm font-semibold">Davangere</p>
+            <p className="text-sm font-semibold">Karnataka</p>
           </div>
         </div>
       </header>
@@ -151,8 +151,8 @@ const App = () => {
               SATELLITE SECTOR OVERVIEW
             </div>
             <MapContainer 
-              center={[14.4666, 75.9242]} 
-              zoom={9} 
+              center={[15.3173, 75.7139]} 
+              zoom={7} 
               style={{ height: '100%', width: '100%', borderRadius: '14px' }}
               zoomControl={false}
             >

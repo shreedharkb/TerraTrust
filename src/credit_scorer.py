@@ -17,7 +17,8 @@ from src.config import *
 
 class VisualCreditScorer:
     """
-    Generates a Visual Credit Score using a deterministic heuristic algorithm.
+    Generates a Visual Credit Score using a four-model ML pipeline.
+    The final credit decision is made by the XGBoost Credit Risk Classifier.
     """
     
     def __init__(self):
@@ -47,8 +48,13 @@ class VisualCreditScorer:
         if os.path.exists(path_water):
             self.models['water_regressor'] = joblib.load(path_water)
             print(f"  ✅ Loaded Water Regressor model")
+        # Credit Risk Classifier (final decision engine)
+        path_credit = os.path.join(MODELS_DIR, "credit_risk_classifier_model.pkl")
+        if os.path.exists(path_credit):
+            self.models['credit_risk_classifier'] = joblib.load(path_credit)
+            print(f"  ✅ Loaded Credit Risk Classifier model")
         else:
-            print(f"  ⚠️ Water Regressor model not found at {path_water}")
+            print(f"  ⚠️ Credit Risk Classifier model not found at {path_credit}")
     
     def predict_ndvi(self, farm_data):
         """Predict NDVI from Ground Features using XGBoost."""
@@ -110,24 +116,59 @@ class VisualCreditScorer:
         except:
             return 50.0
         
+    def predict_credit_risk(self, ndvi_score, soil_score, water_score, farm_size):
+        """
+        Use the XGBoost Credit Risk Classifier to predict repayment probability.
+        Returns (repay_probability [0-1], predicted_label [0/1]).
+        """
+        if 'credit_risk_classifier' not in self.models:
+            # Fallback: weighted average if model not trained yet
+            raw = (ndvi_score * 0.40) + (water_score * 0.30) + (soil_score * 0.30)
+            prob = round(max(0, min(100, raw)), 1) / 100.0
+            return prob, int(prob >= 0.5)
+
+        artifacts = self.models['credit_risk_classifier']
+        model    = artifacts['model']
+        scaler   = artifacts['scaler']
+        features = artifacts['features']
+
+        # Map feature names to values
+        feature_vals = {
+            'ndvi':                    ndvi_score / 100.0,   # model trained on raw ndvi (0-1)
+            'soil_suitability_score':  soil_score,
+            'water_availability_score': water_score,
+            'farm_size':               farm_size,
+        }
+        X = np.array([[feature_vals.get(f, 0) for f in features]])
+        try:
+            X_scaled = scaler.transform(X)
+            prob  = float(model.predict_proba(X_scaled)[0][1])   # P(good repayment)
+            label = int(model.predict(X_scaled)[0])
+            return prob, label
+        except Exception as e:
+            raw = (ndvi_score * 0.40 + water_score * 0.30 + soil_score * 0.30) / 100.0
+            return raw, int(raw >= 0.5)
+
     def generate_credit_score(self, farm_data):
         """
         Generate the complete Visual Credit Score with supporting evidence.
-        Uses deterministic weighting:
-        40% - ML Predicted NDVI 
-        30% - Groundwater Depth (KGIS)
-        30% - Soil Suitability (KGIS)
+        Final score = repayment probability (from Credit Risk Classifier) × 100.
+        Component models provide explainability.
         """
         
-        # Get components
+        # Get intermediate ML predictions
         predicted_ndvi = self.predict_ndvi(farm_data)
-        soil_score = self.compute_soil_score(farm_data)
-        water_score = self.compute_water_score(farm_data)
-        
-        # Calculate Heuristic Credit Score
+        soil_score     = self.compute_soil_score(farm_data)
+        water_score    = self.compute_water_score(farm_data)
+        farm_size      = float(farm_data.get('farm_size', 3.0) or 3.0)
+
         ndvi_score = predicted_ndvi * 100
-        final_score = (ndvi_score * 0.40) + (water_score * 0.30) + (soil_score * 0.30)
-        final_score = round(max(0, min(100, final_score)), 1)
+
+        # Final score from Credit Risk Classifier (repayment probability × 100)
+        repay_prob, repay_label = self.predict_credit_risk(
+            ndvi_score, soil_score, water_score, farm_size
+        )
+        final_score = round(repay_prob * 100, 1)
         
         # Risk category
         risk_category = "Unknown"
@@ -146,17 +187,20 @@ class VisualCreditScorer:
         
         result = {
             'point_id_yr': farm_data.get('point_id_yr', 'UNKNOWN'),
-            'year': farm_data.get('year', 2023),
-            'taluk': farm_data.get('taluk', 'Unknown'),
-            
+            'year':        farm_data.get('year', 2023),
+            'taluk':       farm_data.get('taluk', 'Unknown'),
+            'district':    farm_data.get('district', 'Unknown'),
+
             'heuristic_credit_score': final_score,
-            'risk_category': risk_category,
-            'recommendation': recommendation,
-            
+            'risk_category':          risk_category,
+            'recommendation':         recommendation,
+            'repayment_probability':  round(repay_prob, 4),
+
             'components': {
                 'predicted_ndvi_score': round(ndvi_score, 1),
-                'water_score': round(water_score, 1),
-                'soil_score': round(soil_score, 1)
+                'water_score':          round(water_score, 1),
+                'soil_score':           round(soil_score, 1),
+                'farm_size':            farm_size,
             },
             
             'evidence': {

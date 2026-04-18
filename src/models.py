@@ -272,10 +272,85 @@ def train_water_regressor(df):
     return model_artifacts
 
 # ============================================================
+# Model: Credit Risk Classifier (Final Decision Model)
+# ============================================================
+
+def train_credit_risk_classifier(df):
+    """
+    Train an XGBoost Binary Classifier to predict repayment_status (0=default, 1=good).
+    Uses the predicted-NDVI, soil score, water score, and farm_size as features.
+    This is the final model that drives the heuristic credit decision.
+    """
+    print("\n" + "=" * 60)
+    print("MODEL: Credit Risk Classifier (Final Decision Engine)")
+    print("=" * 60)
+
+    features = ['ndvi', 'soil_suitability_score', 'water_availability_score', 'farm_size']
+    target   = 'repayment_status'
+
+    # Fallback: if ndvi column not present, try predicted_ndvi
+    if 'ndvi' not in df.columns and 'predicted_ndvi' in df.columns:
+        df = df.rename(columns={'predicted_ndvi': 'ndvi'})
+
+    model_df = df[features + [target]].dropna()
+    print(f"  Training on {len(model_df)} valid records.")
+
+    if len(model_df) < 10:
+        print("  ❌ Not enough data to train credit risk classifier.")
+        return None
+
+    X = model_df[features]
+    y = model_df[target].astype(int)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled  = scaler.transform(X_test)
+
+    scale_pos_weight = max(1, (y == 0).sum() / max((y == 1).sum(), 1))  # handle class imbalance
+    model = XGBClassifier(
+        n_estimators=200, max_depth=5, learning_rate=0.05,
+        scale_pos_weight=scale_pos_weight,
+        use_label_encoder=False, eval_metric='logloss',
+        random_state=42
+    )
+    model.fit(X_train_scaled, y_train)
+    pred      = model.predict(X_test_scaled)
+    pred_prob = model.predict_proba(X_test_scaled)[:, 1]
+
+    acc = accuracy_score(y_test, pred)
+    print(f"\n  ✅ Credit Risk Classifier Results:")
+    print(f"     Accuracy: {acc:.4f}")
+
+    # Feature importance
+    fi = pd.DataFrame({'feature': features, 'importance': model.feature_importances_})
+    fi = fi.sort_values('importance', ascending=False)
+    print("\n  Feature Importance:")
+    for _, row in fi.iterrows():
+        bar = "█" * int(row['importance'] * 50)
+        print(f"    {row['feature']:35s} {row['importance']:.4f} {bar}")
+
+    model_artifacts = {
+        'model':    model,
+        'scaler':   scaler,
+        'features': features,
+        'accuracy': acc,
+    }
+
+    model_path = os.path.join(MODELS_DIR, "credit_risk_classifier_model.pkl")
+    joblib.dump(model_artifacts, model_path)
+    print(f"  💾 Saved credit risk classifier to: {model_path}")
+    return model_artifacts
+
+
+# ============================================================
 # Generate Model Metrics Report
 # ============================================================
 
-def save_metrics_report(ndvi_model, soil_model, water_model):
+def save_metrics_report(ndvi_model, soil_model, water_model, credit_model=None):
     """Save a comprehensive metrics report for the LaTeX document."""
     report = {
         "ndvi_predictor": {
@@ -290,6 +365,10 @@ def save_metrics_report(ndvi_model, soil_model, water_model):
         "water_regressor": {
             "model": "XGBoost",
             "rmse": round(water_model.get('rmse', 0), 4) if water_model else None,
+        },
+        "credit_risk_classifier": {
+            "model": "XGBoost",
+            "accuracy": round(credit_model.get('accuracy', 0), 4) if credit_model else None,
         }
     }
     
@@ -315,13 +394,14 @@ def run_model_training():
     if df is None:
         return
     
-    # Step 2: Train honest predictive models
-    ndvi_model = train_ndvi_predictor(df)
-    soil_model = train_soil_classifier(df)
-    water_model = train_water_regressor(df)
-    
+    # Step 2: Train all predictive models
+    ndvi_model   = train_ndvi_predictor(df)
+    soil_model   = train_soil_classifier(df)
+    water_model  = train_water_regressor(df)
+    credit_model = train_credit_risk_classifier(df)
+
     # Step 3: Save metrics report
-    report = save_metrics_report(ndvi_model, soil_model, water_model)
+    report = save_metrics_report(ndvi_model, soil_model, water_model, credit_model)
     
     print("\n" + "=" * 60)
     print("  ✅ ML PIPELINE EXECUTED STRICTLY UNDER ACADEMIC CONSTRAINTS")
