@@ -9,7 +9,7 @@ import requests
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from shapely.geometry import mapping
+from shapely.geometry import mapping, Point
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config import *
@@ -105,6 +105,34 @@ def fetch_climate_data(lat, lon):
     return None
 
 
+def generate_sample_points(gdf, points_per_polygon=10):
+    """Generate random physical coordinates strictly inside the valid real boundaries."""
+    print(f"\n  Generating a dense grid of {points_per_polygon} real geographic points per Taluk...")
+    points = []
+    np.random.seed(42) # Consistent grid
+    
+    for idx, row in gdf.iterrows():
+        poly = row['geometry']
+        taluk_name = row['KGISTalukN']
+        minx, miny, maxx, maxy = poly.bounds
+        
+        count = 0
+        while count < points_per_polygon:
+            pnt = Point(np.random.uniform(minx, maxx), np.random.uniform(miny, maxy))
+            if poly.contains(pnt):
+                points.append({
+                    'taluk': taluk_name,
+                    'point_id': f"{taluk_name[:3].upper()}_{count:03d}",
+                    'latitude': pnt.y,
+                    'longitude': pnt.x
+                })
+                count += 1
+                
+    points_df = pd.DataFrame(points)
+    print(f"  Generated {len(points_df)} strict real coordinate locations.")
+    return points_df
+
+
 def run_full_data_pipeline():
     """Execute the complete data pipeline with genuine APIs."""
     print("\n" + "=" * 60)
@@ -116,6 +144,9 @@ def run_full_data_pipeline():
     district_gdf, bounds = load_district_boundary()
     taluks_gdf = load_taluk_boundaries()
 
+    # Generate exact real points
+    points_df = generate_sample_points(taluks_gdf, points_per_polygon=10)
+
     # Step 3: Fetch genuine soil data from ISRIC SoilGrids
     print("\n" + "=" * 60)
     print("STEP 3: Fetching Soil Data from ISRIC SoilGrids API")
@@ -123,15 +154,16 @@ def run_full_data_pipeline():
     print("=" * 60)
     
     soil_records = []
-    for _, row in taluks_gdf.iterrows():
-        name = row['KGISTalukN']
-        lat, lon = row['centroid_lat'], row['centroid_lon']
-        print(f"  {name} ({lat:.4f}N, {lon:.4f}E)...", end=" ")
+    for _, row in points_df.iterrows():
+        name = row['taluk']
+        pid = row['point_id']
+        lat, lon = row['latitude'], row['longitude']
+        print(f"  {pid} ({lat:.4f}N, {lon:.4f}E)...", end=" ")
         
         soil = fetch_soil_data(lat, lon)
         if soil and len(soil) > 0:
             rec = {
-                'taluk': name, 'latitude': lat, 'longitude': lon,
+                'point_id': pid, 'taluk': name, 'latitude': lat, 'longitude': lon,
                 'clay_pct': round(soil.get('clay', 0) / 10, 1) if soil.get('clay') else None,
                 'sand_pct': round(soil.get('sand', 0) / 10, 1) if soil.get('sand') else None,
                 'silt_pct': round(soil.get('silt', 0) / 10, 1) if soil.get('silt') else None,
@@ -140,14 +172,13 @@ def run_full_data_pipeline():
                 'organic_carbon_dg_per_kg': soil.get('soc'),
                 'bulk_density_cg_per_cm3': soil.get('bdod'),
                 'api_source': 'ISRIC SoilGrids v2.0',
-                'api_url': f'https://rest.isric.org/soilgrids/v2.0/properties/query?lon={lon}&lat={lat}',
             }
             soil_records.append(rec)
-            print(f"pH={rec['pH']}, Clay={rec['clay_pct']}%, Sand={rec['sand_pct']}%, N={rec['nitrogen_g_per_kg']}g/kg")
+            print("OK")
         else:
             print("FAILED")
-            soil_records.append({'taluk': name, 'latitude': lat, 'longitude': lon})
-        time.sleep(1.5)
+            soil_records.append({'point_id': pid, 'taluk': name, 'latitude': lat, 'longitude': lon})
+        time.sleep(0.5)
     
     soil_df = pd.DataFrame(soil_records)
     soil_df.to_csv(os.path.join(TABULAR_DIR, "davangere_soil_data.csv"), index=False)
@@ -160,10 +191,11 @@ def run_full_data_pipeline():
     print("=" * 60)
     
     climate_records = []
-    for _, row in taluks_gdf.iterrows():
-        name = row['KGISTalukN']
-        lat, lon = row['centroid_lat'], row['centroid_lon']
-        print(f"  {name} ({lat:.4f}N, {lon:.4f}E)...", end=" ")
+    for _, row in points_df.iterrows():
+        name = row['taluk']
+        pid = row['point_id']
+        lat, lon = row['latitude'], row['longitude']
+        print(f"  {pid} ({lat:.4f}N, {lon:.4f}E)...", end=" ")
         
         climate = fetch_climate_data(lat, lon)
         if climate and len(climate) > 0:
@@ -173,7 +205,7 @@ def run_full_data_pipeline():
             wet = [v for v in climate.get('GWETROOT', {}).values() if v != -999 and v is not None]
             
             rec = {
-                'taluk': name, 'latitude': lat, 'longitude': lon,
+                'point_id': pid, 'taluk': name, 'latitude': lat, 'longitude': lon,
                 'avg_monthly_rainfall_mm': round(np.mean(precip), 2) if precip else None,
                 'total_annual_rainfall_mm': round(np.sum(precip[-12:]), 2) if len(precip) >= 12 else None,
                 'avg_temperature_c': round(np.mean(temp), 2) if temp else None,
@@ -181,14 +213,13 @@ def run_full_data_pipeline():
                 'avg_root_zone_wetness': round(np.mean(wet), 4) if wet else None,
                 'rainfall_trend': 'Stable' if precip and np.std(precip[-24:]) < 50 else 'Variable',
                 'api_source': 'NASA POWER v2.0',
-                'api_url': f'https://power.larc.nasa.gov/api/temporal/monthly/point?latitude={lat}&longitude={lon}&start=2020&end=2024&community=AG&parameters=PRECTOTCORR,T2M,RH2M,GWETROOT&format=JSON',
             }
             climate_records.append(rec)
-            print(f"Rain={rec['avg_monthly_rainfall_mm']}mm, Temp={rec['avg_temperature_c']}C, Wetness={rec['avg_root_zone_wetness']}")
+            print("OK")
         else:
             print("FAILED")
-            climate_records.append({'taluk': name, 'latitude': lat, 'longitude': lon})
-        time.sleep(1.5)
+            climate_records.append({'point_id': pid, 'taluk': name, 'latitude': lat, 'longitude': lon})
+        time.sleep(0.5)
     
     climate_df = pd.DataFrame(climate_records)
     climate_df.to_csv(os.path.join(TABULAR_DIR, "davangere_climate_data.csv"), index=False)
@@ -199,20 +230,26 @@ def run_full_data_pipeline():
     print("STEP 5: Building Master Dataset")
     print("=" * 60)
     
-    master = taluks_gdf[['KGISTalukN', 'centroid_lat', 'centroid_lon']].copy()
-    master = master.rename(columns={'KGISTalukN': 'taluk'}).reset_index(drop=True)
+    master = points_df.copy()
     
     # Merge soil
-    soil_merge = soil_df[[c for c in soil_df.columns if c not in ['latitude', 'longitude', 'api_source', 'api_url']]]
-    master = master.merge(soil_merge, on='taluk', how='left')
+    soil_merge = soil_df[[c for c in soil_df.columns if c not in ['latitude', 'longitude', 'taluk', 'api_source', 'api_url']]]
+    master = master.merge(soil_merge, on='point_id', how='left')
     
-    # Merge climate
-    climate_merge = climate_df[[c for c in climate_df.columns if c not in ['latitude', 'longitude', 'api_source', 'api_url']]]
-    master = master.merge(climate_merge, on='taluk', how='left')
+    # Load and merge external attributes (groundwater, land records)
+    gw_path = os.path.join(TABULAR_DIR, "groundwater.csv")
+    lr_path = os.path.join(TABULAR_DIR, "land_records.csv")
     
-    # Add crops
-    np.random.seed(42)
-    master['declared_crop'] = np.random.choice(CROPS, size=len(master), p=[0.35, 0.25, 0.15, 0.15, 0.10])
+    if os.path.exists(gw_path):
+        gw_df = pd.read_csv(gw_path)
+        master = master.merge(gw_df, on='taluk', how='left')
+        
+    if os.path.exists(lr_path):
+        lr_df = pd.read_csv(lr_path)
+        master = master.merge(lr_df, on='taluk', how='left')
+    else:
+        # Fallback if file doesn't exist
+        master['declared_crop'] = 'Maize'
     
     # Compute scores
     master['soil_suitability_score'] = master.apply(_soil_score, axis=1)
@@ -277,6 +314,13 @@ def _water_score(row):
     if hum and not pd.isna(hum):
         if hum > 60: score += 10
         elif hum < 40: score -= 10
+        
+    gw_depth = row.get('groundwater_depth_m')
+    if gw_depth and not pd.isna(gw_depth):
+        if gw_depth < 10: score += 15
+        elif gw_depth < 20: score += 5
+        else: score -= 10
+        
     return max(0, min(100, round(score, 1)))
 
 
