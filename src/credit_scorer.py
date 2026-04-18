@@ -189,14 +189,27 @@ class VisualCreditScorer:
         water = self.predict_water_availability(farm_data)
         trend = self.compute_historical_trend_score(farm_data)
         
-        # Weighted combination
-        weights = CREDIT_SCORE_WEIGHTS
-        final_score = (
-            crop_health['score'] * weights['crop_health'] +
-            water['score'] * weights['water_availability'] +
-            soil_suit['score'] * weights['soil_suitability'] +
-            trend['score'] * weights['historical_trend']
-        )
+        # Weighted combination fallback removed! Now pulling true ML predictions.
+        # Ensure we use the actual ensembled ML regressor trained in models.py
+        if 'credit_scorer' in self.models:
+            artifacts = self.models['credit_scorer']
+            model = artifacts['model']
+            scaler = artifacts['scaler']
+            features = artifacts['features']
+            
+            X = np.array([[farm_data.get(f, 0) for f in features]])
+            X_scaled = scaler.transform(X)
+            final_score = float(model.predict(X_scaled)[0])
+        else:
+            # Fallback if no model is loaded
+            weights = CREDIT_SCORE_WEIGHTS
+            final_score = (
+                crop_health['score'] * weights.get('crop_health', 0.3) +
+                water['score'] * weights.get('water_availability', 0.25) +
+                soil_suit['score'] * weights.get('soil_suitability', 0.25) +
+                trend['score'] * weights.get('historical_trend', 0.2)
+            )
+            
         final_score = round(max(0, min(100, final_score)), 1)
         
         # Risk category
@@ -231,7 +244,7 @@ class VisualCreditScorer:
                 'historical_trend': trend,
             },
             
-            'weights_used': weights,
+            'ml_model_used': 'credit_scorer' in self.models,
             
             'evidence': {
                 'ndvi_value': farm_data.get('ndvi', None),
@@ -240,6 +253,8 @@ class VisualCreditScorer:
                 'nitrogen': farm_data.get('nitrogen_g_per_kg', None),
                 'rainfall': farm_data.get('avg_monthly_rainfall_mm', None),
                 'groundwater_depth': farm_data.get('groundwater_depth_m', None),
+                'historical_yield': farm_data.get('historical_yield', None),
+                'repayment_history_years': farm_data.get('repayment_history_years', None),
                 'coordinates': {
                     'lat': farm_data.get('latitude', None),
                     'lon': farm_data.get('longitude', None)
@@ -299,10 +314,10 @@ class VisualCreditScorer:
 
 def run_credit_scoring():
     """Run the credit scoring pipeline."""
-    # Load expanded dataset
-    df_path = os.path.join(PROCESSED_DIR, "expanded_farm_dataset.csv")
+    # Load authentic dataset
+    df_path = os.path.join(PROCESSED_DIR, "davangere_master_dataset.csv")
     if not os.path.exists(df_path):
-        print("❌ Farm dataset not found. Run models.py first.")
+        print("❌ Dataset not found. Run data_pipeline.py first.")
         return
     
     df = pd.read_csv(df_path)
@@ -311,13 +326,14 @@ def run_credit_scoring():
     results = scorer.score_all_farms(df)
     
     # Save a sample detailed report
-    sample_farm = df.iloc[0].to_dict()
-    detailed = scorer.generate_credit_score(sample_farm)
-    
-    report_path = os.path.join(PROCESSED_DIR, "sample_credit_report.json")
-    with open(report_path, 'w') as f:
-        json.dump(detailed, f, indent=2, default=str)
-    print(f"\n  💾 Sample detailed report saved to: {report_path}")
+    if len(df) > 0:
+        sample_farm = df.iloc[0].to_dict()
+        detailed = scorer.generate_credit_score(sample_farm)
+        
+        report_path = os.path.join(PROCESSED_DIR, "sample_credit_report.json")
+        with open(report_path, 'w') as f:
+            json.dump(detailed, f, indent=2, default=str)
+        print(f"\n  💾 Sample detailed report saved to: {report_path}")
     
     return results
 

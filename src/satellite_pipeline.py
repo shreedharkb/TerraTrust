@@ -21,6 +21,10 @@ import requests
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
+import pystac_client
+import planetary_computer
+import odc.stac
+import xarray as xr
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config import *
@@ -42,7 +46,7 @@ def search_sentinel2_scenes(bbox, start_date="2024-01-01", end_date="2024-12-31"
         max_cloud: Maximum cloud cover percentage
     
     Returns:
-        List of scene metadata dicts
+        List of pystac.Item representing the scenes
     """
     print(f"\n  Searching Sentinel-2 scenes for Davangere...")
     print(f"  Date range: {start_date} to {end_date}")
@@ -55,39 +59,30 @@ def search_sentinel2_scenes(bbox, start_date="2024-01-01", end_date="2024-12-31"
         print(f"  Expected: lon in [-180,180], lat in [-90,90]")
         return []
 
-    search_url = f"{PLANETARY_COMPUTER_STAC}/search"
-    
-    search_body = {
-        "collections": ["sentinel-2-l2a"],
-        "bbox": [float(b) for b in bbox],
-        "datetime": f"{start_date}/{end_date}",
-        "query": {
-            "eo:cloud_cover": {"lt": max_cloud}
-        },
-        "sortby": [{"field": "datetime", "direction": "asc"}],
-        "limit": 50
-    }
-
     try:
-        response = requests.post(search_url, json=search_body, timeout=30)
-        if response.status_code == 200:
-            results = response.json()
-            features = results.get('features', [])
-            print(f"  Found {len(features)} Sentinel-2 scenes")
-            
-            # Print sample scene IDs for verification
-            if features:
-                for s in features[:3]:
-                    props = s.get('properties', {})
-                    print(f"    Scene: {s.get('id', 'N/A')} | Date: {props.get('datetime', 'N/A')[:10]} | Cloud: {props.get('eo:cloud_cover', 'N/A')}%")
-                if len(features) > 3:
-                    print(f"    ... and {len(features) - 3} more scenes")
-            
-            return features
-        else:
-            print(f"  STAC search failed: HTTP {response.status_code}")
-            print(f"     Response: {response.text[:500]}")
-            return []
+        catalog = pystac_client.Client.open(
+            PLANETARY_COMPUTER_STAC,
+            modifier=planetary_computer.sign_inplace,
+        )
+        search = catalog.search(
+            collections=["sentinel-2-l2a"],
+            bbox=bbox,
+            datetime=f"{start_date}/{end_date}",
+            query={"eo:cloud_cover": {"lt": max_cloud}},
+            sortby="datetime",
+            limit=50,
+        )
+        items = list(search.items())
+        print(f"  Found {len(items)} Sentinel-2 scenes")
+        
+        # Print sample scene IDs for verification
+        if items:
+            for s in items[:3]:
+                print(f"    Scene: {s.id} | Date: {s.datetime.strftime('%Y-%m-%d')} | Cloud: {s.properties.get('eo:cloud_cover', 'N/A')}%")
+            if len(items) > 3:
+                print(f"    ... and {len(items) - 3} more scenes")
+        
+        return items
     except Exception as e:
         print(f"  STAC search error: {e}")
         return []
@@ -120,72 +115,87 @@ def extract_scene_info(scene):
 # NDVI / NDWI Computation from Scene Statistics
 # ============================================================
 
-def compute_ndvi_from_scenes(scenes):
+def compute_ndvi_from_scenes(scenes, bbox=None):
     """
-    Compute NDVI statistics for each scene.
+    Compute actual NDVI and NDWI statistics for each scene.
     
     NDVI = (NIR - Red) / (NIR + Red) = (B08 - B04) / (B08 + B04)
     NDWI = (Green - NIR) / (Green + NIR) = (B03 - B08) / (B03 + B08)
     
-    For this project, we use the genuine scene metadata (date, cloud cover,
-    platform) and estimate NDVI based on Davangere's known crop calendar:
-    - Kharif season: June-October (main cropping)
-    - Rabi season: November-March
-    - Summer/Fallow: April-May
-    
-    The estimation uses region-specific phenological profiles backed by
-    published literature on Davangere's maize/cotton cropping patterns.
+    Downloads the exact pixel arrays over the provided bbox using odc.stac and
+    calculates real aggregate data, skipping clouds via the SCL indicator mask.
     """
     print("\n" + "=" * 60)
-    print("Computing NDVI & NDWI from Sentinel-2 Scenes")
+    print("Computing Real NDVI & NDWI from Sentinel-2 Pixels")
     print("=" * 60)
     print("  NDVI = (B08_NIR - B04_Red) / (B08_NIR + B04_Red)")
     print("  NDWI = (B03_Green - B08_NIR) / (B03_Green + B08_NIR)")
     
+    if not scenes or bbox is None:
+        return pd.DataFrame()
+        
     ndvi_records = []
-    np.random.seed(42)  # Reproducibility
     
-    for scene in scenes:
-        props = scene.get('properties', {})
-        scene_date = props.get('datetime', '')[:10]
-        cloud_cover = props.get('eo:cloud_cover', 100)
-        scene_id = scene.get('id', '')
+    # Ensure signed items for download access
+    signed_items = planetary_computer.sign(scenes)
+    
+    try:
+        print(f"  Loading pixel data for {len(signed_items)} scenes... this may take a moment.")
+        # Load the data using odc.stac. Resolution is set slightly lower to prevent RAM issues on large bboxes.
+        ds = odc.stac.load(
+            signed_items,
+            bands=("B04", "B08", "B03", "SCL"),
+            bbox=bbox,
+            resolution=0.001,
+            chunks={"time": 1, "x": 1000, "y": 1000}
+        )
+    except Exception as e:
+        print(f"  Error loading remote raster data: {e}")
+        return pd.DataFrame()
         
-        month = int(scene_date[5:7]) if scene_date else 6
+    for i, dt_val in enumerate(ds.time.values):
+        dt = pd.to_datetime(dt_val)
+        scene_date = dt.strftime('%Y-%m-%d')
+        month = dt.month
+        item = signed_items[i]
         
-        # Davangere crop calendar-based NDVI profiles
-        # These ranges are based on published phenological studies for semi-arid Karnataka
-        if month in [6, 7]:      # Early Kharif - sowing/germination
-            base_ndvi = np.random.uniform(0.15, 0.30)
-        elif month in [8, 9]:    # Peak Kharif - vegetative/flowering
-            base_ndvi = np.random.uniform(0.45, 0.70)
-        elif month in [10, 11]:  # Late Kharif harvest / Rabi sowing
-            base_ndvi = np.random.uniform(0.35, 0.55)
-        elif month in [12, 1]:   # Rabi vegetative
-            base_ndvi = np.random.uniform(0.30, 0.50)
-        elif month in [2, 3]:    # Rabi maturity
-            base_ndvi = np.random.uniform(0.40, 0.60)
-        else:                     # Fallow / pre-monsoon (Apr-May)
-            base_ndvi = np.random.uniform(0.10, 0.25)
+        img = ds.isel(time=i)
         
-        # NDWI estimation
-        base_ndwi = np.random.uniform(-0.1, 0.3)
-        if month in [7, 8, 9]:  # Monsoon - more water
-            base_ndwi += 0.15
+        # SCL valid pixels: 4 (Vegetation), 5 (Bare Soil), 6 (Water)
+        # Cloud pixels are 8, 9, 10
+        valid_mask = (img.SCL >= 4) & (img.SCL <= 7)
+        
+        # Convert to float and scale (L2A needs scaling by 10000)
+        red = img.B04.where(valid_mask).astype(float) / 10000.0
+        nir = img.B08.where(valid_mask).astype(float) / 10000.0
+        green = img.B03.where(valid_mask).astype(float) / 10000.0
+        
+        # True pixel calculation
+        ndvi_arr = (nir - red) / (nir + red + 1e-8)
+        ndwi_arr = (green - nir) / (green + nir + 1e-8)
+        
+        ndvi_mean = float(ndvi_arr.mean().values)
+        if np.isnan(ndvi_mean):
+            print(f"  {scene_date} | Skipped (100% Cloud covered or missing data)")
+            continue
+            
+        ndvi_min = float(ndvi_arr.min().values)
+        ndvi_max = float(ndvi_arr.max().values)
+        ndwi_mean = float(ndwi_arr.mean().values)
         
         record = {
-            'scene_id': scene_id,
+            'scene_id': item.id,
             'date': scene_date,
             'month': month,
-            'cloud_cover_pct': round(cloud_cover, 1),
-            'ndvi_mean': round(base_ndvi, 4),
-            'ndvi_min': round(max(0, base_ndvi - 0.15), 4),
-            'ndvi_max': round(min(1, base_ndvi + 0.15), 4),
-            'ndwi_mean': round(base_ndwi, 4),
-            'crop_health': classify_ndvi(base_ndvi),
-            'growth_stage': estimate_growth_stage(base_ndvi, month),
-            'platform': props.get('platform', 'Sentinel-2A'),
-            'data_source': 'Microsoft Planetary Computer / ESA Copernicus',
+            'cloud_cover_pct': item.properties.get('eo:cloud_cover', 100),
+            'ndvi_mean': round(ndvi_mean, 4),
+            'ndvi_min': round(ndvi_min, 4),
+            'ndvi_max': round(ndvi_max, 4),
+            'ndwi_mean': round(ndwi_mean, 4),
+            'crop_health': classify_ndvi(ndvi_mean),
+            'growth_stage': estimate_growth_stage(ndvi_mean, month),
+            'platform': item.properties.get('platform', 'Sentinel-2A'),
+            'data_source': 'Real Raster via planetary_computer & odc.stac',
         }
         ndvi_records.append(record)
         
@@ -245,9 +255,10 @@ def build_ndvi_timeseries(bbox, years=None):
         if scenes:
             # Take up to 12 scenes per year (roughly 1 per month)
             selected = scenes[:12]
-            ndvi_df = compute_ndvi_from_scenes(selected)
-            ndvi_df['year'] = year
-            all_records.append(ndvi_df)
+            ndvi_df = compute_ndvi_from_scenes(selected, bbox=bbox)
+            if not ndvi_df.empty:
+                ndvi_df['year'] = year
+                all_records.append(ndvi_df)
         
         import time
         time.sleep(1)  # API courtesy
@@ -344,7 +355,7 @@ def run_satellite_pipeline(bbox):
         return pd.DataFrame(), {}
     
     # Compute NDVI from scenes
-    ndvi_df = compute_ndvi_from_scenes(scenes[:24])
+    ndvi_df = compute_ndvi_from_scenes(scenes[:24], bbox=bbox)
     
     # Save NDVI data
     ndvi_path = os.path.join(SATELLITE_DIR, "ndvi_data.csv")
