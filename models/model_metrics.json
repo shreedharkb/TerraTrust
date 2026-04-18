@@ -1,0 +1,23 @@
+{
+  "crop_health_classifier": {
+    "model": "XGBoost",
+    "accuracy": 1.0,
+    "cv_accuracy": 0.99
+  },
+  "soil_suitability_classifier": {
+    "model": "XGBoost",
+    "accuracy": 0.6833,
+    "cv_accuracy": 0.58
+  },
+  "water_availability_regressor": {
+    "model": "GradientBoosting",
+    "rmse": 3.0108,
+    "r2_score": 0.9198
+  },
+  "credit_risk_scorer": {
+    "model": "XGBoost",
+    "rmse": 2.3497,
+    "r2_score": 0.9018,
+    "risk_category_accuracy": 0.9333
+  }
+}

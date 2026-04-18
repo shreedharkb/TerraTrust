@@ -1,0 +1,7 @@
+taluk,latitude,longitude,clay_pct,sand_pct,silt_pct,pH,nitrogen_g_per_kg,organic_carbon_dg_per_kg,bulk_density_cg_per_cm3,api_source,api_url
+Harihar,14.440749816287074,75.7655528487785,38.1,34.0,28.0,6.8,1.44,169,143,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.7655528487785&lat=14.440749816287074
+Jagaluru,14.552662675821422,76.29181483791972,30.1,43.8,26.1,6.9,2.39,289,139,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.29181483791972&lat=14.552662675821422
+Davanagere,14.393412668820613,75.99079294415714,36.5,37.9,25.6,7.1,1.56,210,144,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.99079294415714&lat=14.393412668820613
+Honnali,14.23866855848784,75.69154616945961,32.5,39.3,28.2,6.8,1.56,207,142,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.69154616945961&lat=14.23866855848784
+Channagiri,14.073420423570155,75.92265704571489,32.0,43.7,24.2,7.0,1.32,194,143,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.92265704571489&lat=14.073420423570155
+Nyamati,14.13740016299783,75.56720355839532,32.3,38.1,29.6,7.0,1.14,182,144,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.56720355839532&lat=14.13740016299783
