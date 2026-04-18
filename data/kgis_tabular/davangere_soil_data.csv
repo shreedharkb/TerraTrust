@@ -1,2 +1,26 @@
-taluk,latitude,longitude
-Taluk_0,1582065.788143406,601926.431288366
+taluk,latitude,longitude,clay_pct,sand_pct,silt_pct,pH,nitrogen_g_per_kg,organic_carbon_dg_per_kg,bulk_density_cg_per_cm3,api_source,api_url
+Haveri,14.738948811634325,75.41646119616549,38.2,31.5,30.3,7.5,1.95,215,141,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.41646119616549&lat=14.738948811634325
+Chitradurga,14.168419519143018,76.51511737968279,31.7,41.2,27.1,7.0,1.36,186,142,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.51511737968279&lat=14.168419519143018
+Davanagere,14.30865713860268,75.94526172988698,32.8,42.1,25.1,6.8,1.45,219,141,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.94526172988698&lat=14.30865713860268
+Shivamogga,14.043366823499252,75.2208924975328,27.2,45.7,27.1,6.3,1.63,220,134,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.2208924975328&lat=14.043366823499252
+Chikkamagaluru,13.454006204412709,75.68977415571582,31.6,41.5,26.9,5.8,3.26,385,116,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.68977415571582&lat=13.454006204412709
+Vijayanagara,14.895701824048368,76.18798106452302,35.0,33.2,31.7,7.4,1.39,176,146,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.18798106452302&lat=14.895701824048368
+nan,14.608490944606798,75.655250885951,39.3,31.8,28.9,8.0,1.6,316,140,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.655250885951&lat=14.608490944606798
+nan,14.398594743573039,75.52815871450001,30.7,38.4,30.9,7.0,1.71,183,140,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.52815871450001&lat=14.398594743573039
+nan,14.771852276571986,76.49400953260266,29.6,43.3,27.0,7.2,1.57,312,137,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.49400953260266&lat=14.771852276571986
+nan,14.809514018807702,76.24678253303351,37.8,38.4,23.8,7.2,1.55,190,145,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.24678253303351&lat=14.809514018807702
+nan,14.721976016623145,75.98222799523603,32.1,37.3,30.6,7.5,1.57,217,139,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.98222799523603&lat=14.721976016623145
+nan,14.36176472869074,76.72188038271632,36.0,36.7,27.2,7.1,2.15,584,139,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.72188038271632&lat=14.36176472869074
+nan,14.275493853969149,76.35108730982792,32.6,38.2,29.1,7.1,1.6,214,140,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.35108730982792&lat=14.275493853969149
+nan,14.051584052338425,76.1946669126722,27.4,48.6,23.9,6.9,1.7,202,140,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.1946669126722&lat=14.051584052338425
+nan,14.440749816287074,75.7655528487785,38.1,34.0,28.0,6.8,1.44,169,143,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.7655528487785&lat=14.440749816287074
+nan,14.552662675821422,76.29181483791972,30.1,43.8,26.1,6.9,2.39,289,139,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.29181483791972&lat=14.552662675821422
+nan,14.393412668820613,75.99079294415714,36.5,37.9,25.6,7.1,1.56,210,144,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.99079294415714&lat=14.393412668820613
+nan,14.23866855848784,75.69154616945961,32.5,39.3,28.2,6.8,1.56,207,142,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.69154616945961&lat=14.23866855848784
+nan,14.073420423570155,75.92265704571489,32.0,43.7,24.2,7.0,1.32,194,143,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.92265704571489&lat=14.073420423570155
+nan,14.13740016299783,75.56720355839532,32.3,38.1,29.6,7.0,1.14,182,144,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.56720355839532&lat=14.13740016299783
+nan,14.302866240093014,75.34480842652209,35.1,40.4,24.5,6.4,1.79,178,136,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.34480842652209&lat=14.302866240093014
+nan,13.960137470211324,75.51083212251729,30.2,41.2,28.7,6.5,1.56,169,137,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.51083212251729&lat=13.960137470211324
+nan,13.901258493047987,75.74246075189953,28.7,46.8,24.5,6.7,1.5,228,140,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.74246075189953&lat=13.901258493047987
+nan,13.670141057760727,75.78355594731715,28.8,41.4,29.8,6.6,2.01,240,129,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=75.78355594731715&lat=13.670141057760727
+nan,13.772419432254665,76.02064956524922,36.2,38.8,25.0,7.0,1.38,170,141,ISRIC SoilGrids v2.0,https://rest.isric.org/soilgrids/v2.0/properties/query?lon=76.02064956524922&lat=13.772419432254665
