@@ -25,13 +25,30 @@ class VisualCreditScorer:
         self.load_models()
     
     def load_models(self):
-        """Load the NDVI Predictor."""
-        path = os.path.join(MODELS_DIR, "ndvi_predictor_model.pkl")
-        if os.path.exists(path):
-            self.models['ndvi_predictor'] = joblib.load(path)
+        """Load the ML models."""
+        # NDVI Predictor
+        path_ndvi = os.path.join(MODELS_DIR, "ndvi_predictor_model.pkl")
+        if os.path.exists(path_ndvi):
+            self.models['ndvi_predictor'] = joblib.load(path_ndvi)
             print(f"  ✅ Loaded NDVI Predictor model")
         else:
-            print(f"  ⚠️ NDVI Predictor model not found at {path}")
+            print(f"  ⚠️ NDVI Predictor model not found at {path_ndvi}")
+
+        # Soil Classifier
+        path_soil = os.path.join(MODELS_DIR, "soil_classifier_model.pkl")
+        if os.path.exists(path_soil):
+            self.models['soil_classifier'] = joblib.load(path_soil)
+            print(f"  ✅ Loaded Soil Classifier model")
+        else:
+            print(f"  ⚠️ Soil Classifier model not found at {path_soil}")
+
+        # Water Regressor
+        path_water = os.path.join(MODELS_DIR, "water_regressor_model.pkl")
+        if os.path.exists(path_water):
+            self.models['water_regressor'] = joblib.load(path_water)
+            print(f"  ✅ Loaded Water Regressor model")
+        else:
+            print(f"  ⚠️ Water Regressor model not found at {path_water}")
     
     def predict_ndvi(self, farm_data):
         """Predict NDVI from Ground Features using XGBoost."""
@@ -52,15 +69,46 @@ class VisualCreditScorer:
             return farm_data.get('ndvi', 0.45)
             
     def compute_soil_score(self, farm_data):
-        """Deterministic score based on Soil pH and Nitrogen."""
-        ph = farm_data.get('pH', 7.0)
-        nitrogen = farm_data.get('nitrogen_g_per_kg', 0)
+        """Use ML Classifier to determine soil suitability score."""
+        if 'soil_classifier' not in self.models:
+            # Fallback if model missing
+            return 50.0
+            
+        artifacts = self.models['soil_classifier']
+        model = artifacts['model']
+        scaler = artifacts['scaler']
+        le = artifacts['label_encoder']
+        features = artifacts['features']
         
-        # Optimal pH 6.0 to 7.5
-        ph_score = 100 - abs(6.5 - ph) * 20
-        n_score = min(100, nitrogen * 50)
+        X = np.array([[farm_data.get(f, 0) for f in features]])
+        try:
+            X_scaled = scaler.transform(X)
+            pred_idx = model.predict(X_scaled)[0]
+            label = le.inverse_transform([pred_idx])[0]
+            
+            # Map labels to numeric scores
+            score_map = {'Suitable': 95.0, 'Marginal': 60.0, 'Unsuitable': 30.0}
+            return float(score_map.get(label, 50.0))
+        except:
+            return 50.0
+
+    def compute_water_score(self, farm_data):
+        """Use ML Regressor to determine water availability score."""
+        if 'water_regressor' not in self.models:
+            return 50.0
+            
+        artifacts = self.models['water_regressor']
+        model = artifacts['model']
+        scaler = artifacts['scaler']
+        features = artifacts['features']
         
-        return max(0, min(100, (ph_score + n_score) / 2))
+        X = np.array([[farm_data.get(f, 0) for f in features]])
+        try:
+            X_scaled = scaler.transform(X)
+            pred = model.predict(X_scaled)[0]
+            return float(np.clip(pred, 0, 100))
+        except:
+            return 50.0
         
     def generate_credit_score(self, farm_data):
         """
@@ -74,15 +122,11 @@ class VisualCreditScorer:
         # Get components
         predicted_ndvi = self.predict_ndvi(farm_data)
         soil_score = self.compute_soil_score(farm_data)
-        
-        gw_m = farm_data.get('groundwater_depth_m', 20)
-        if pd.isna(gw_m): gw_m = 20
-        # Optimal groundwater is < 10m
-        gw_score = max(0, min(100, 100 - (gw_m - 10) * 3))
+        water_score = self.compute_water_score(farm_data)
         
         # Calculate Heuristic Credit Score
         ndvi_score = predicted_ndvi * 100
-        final_score = (ndvi_score * 0.40) + (gw_score * 0.30) + (soil_score * 0.30)
+        final_score = (ndvi_score * 0.40) + (water_score * 0.30) + (soil_score * 0.30)
         final_score = round(max(0, min(100, final_score)), 1)
         
         # Risk category
@@ -111,7 +155,7 @@ class VisualCreditScorer:
             
             'components': {
                 'predicted_ndvi_score': round(ndvi_score, 1),
-                'groundwater_score': round(gw_score, 1),
+                'water_score': round(water_score, 1),
                 'soil_score': round(soil_score, 1)
             },
             

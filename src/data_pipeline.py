@@ -6,6 +6,8 @@ ALL DATA IS 100% GENUINE from verified government/scientific APIs.
 
 import os, sys, json, time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -61,6 +63,14 @@ def load_taluk_boundaries():
     return davangere_taluks
 
 
+def get_retry_session():
+    session = requests.Session()
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
 def fetch_soil_data(lat, lon):
     """Fetch genuine soil data from ISRIC SoilGrids API."""
     params = {
@@ -69,8 +79,9 @@ def fetch_soil_data(lat, lon):
         "depth": ["0-5cm", "5-15cm", "15-30cm"],
         "value": "mean"
     }
+    session = get_retry_session()
     try:
-        r = requests.get(SOILGRIDS_API, params=params, timeout=30)
+        r = session.get(SOILGRIDS_API, params=params, timeout=30)
         if r.status_code == 200:
             data = r.json()
             result = {}
@@ -94,8 +105,9 @@ def fetch_climate_data(lat, lon, year_str):
         "start": year_str, "end": year_str,  # Year-only format
         "format": "JSON"
     }
+    session = get_retry_session()
     try:
-        r = requests.get(NASA_POWER_API, params=params, timeout=60)
+        r = session.get(NASA_POWER_API, params=params, timeout=60)
         if r.status_code == 200:
             return r.json().get('properties', {}).get('parameter', {})
         else:
@@ -258,6 +270,20 @@ def run_full_data_pipeline():
     if os.path.exists(gw_path):
         gw_df = pd.read_csv(gw_path)
         master = master.merge(gw_df, on='taluk', how='left')
+
+    # Load and merge land records
+    lr_path = os.path.join(TABULAR_DIR, "land_records.csv")
+    if os.path.exists(lr_path):
+        lr_df = pd.read_csv(lr_path)
+        if 'Taluk' in lr_df.columns:
+            lr_df.rename(columns={'Taluk': 'taluk'}, inplace=True)
+            # Handle potential case mismatches
+            lr_df['taluk'] = lr_df['taluk'].str.strip().str.title()
+            master['taluk_temp'] = master['taluk'].str.strip().str.title()
+            master = master.merge(lr_df, left_on='taluk_temp', right_on='taluk', how='left', suffixes=('', '_lr'))
+            if 'taluk_lr' in master.columns:
+                master.drop(columns=['taluk_lr'], inplace=True)
+            master.drop(columns=['taluk_temp'], inplace=True)
     
     # Compute scores
     master['soil_suitability_score'] = master.apply(_soil_score, axis=1)

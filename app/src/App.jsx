@@ -16,8 +16,9 @@ L.Icon.Default.mergeOptions({
 
 const App = () => {
   const [geoData, setGeoData] = useState(null);
-  const [farmData, setFarmData] = useState([]);
   const [activeFarm, setActiveFarm] = useState(null);
+  const [allNDVIData, setAllNDVIData] = useState([]);
+  const [trendData, setTrendData] = useState([]);
 
   useEffect(() => {
     // Load GeoJSON Boundaries
@@ -40,7 +41,47 @@ const App = () => {
           },
         });
       });
+    // Load NDVI Timeseries
+    fetch('/data/ndvi_timeseries.csv')
+      .then((res) => res.text())
+      .then((csvText) => {
+        Papa.parse(csvText, {
+          header: true,
+          dynamicTyping: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            setAllNDVIData(results.data);
+          },
+        });
+      });
   }, []);
+
+  useEffect(() => {
+    if (!activeFarm || allNDVIData.length === 0) return;
+
+    // Filter timeseries data for the active farm.
+    // Since ndvi_timeseries.csv might not have point_id, we map by year/month trends 
+    // or tile if available. In this version, we aggregate by year to match the 5-year trend requirement.
+    const filtered = allNDVIData.reduce((acc, curr) => {
+      const year = curr.year;
+      if (!acc[year]) acc[year] = { year: year.toString(), ndvi: 0, count: 0 };
+      acc[year].ndvi += curr.ndvi_mean || 0;
+      acc[year].count += 1;
+      return acc;
+    }, {});
+
+    const trend = Object.values(filtered)
+      .map(d => ({
+        year: d.year,
+        ndvi: Number((d.ndvi / d.count).toFixed(3)),
+        // Extract rain from farmData if available for the specific year, 
+        // or use the current activeFarm's rainfall as a baseline reference
+        rain: farmData.find(f => f.taluk === activeFarm.taluk && f.year === Number(d.year))?.avg_monthly_rainfall_mm || activeFarm.avg_monthly_rainfall_mm || 0
+      }))
+      .sort((a, b) => a.year - b.year);
+
+    setTrendData(trend);
+  }, [activeFarm, allNDVIData, farmData]);
 
   const geoStyle = {
     color: '#10b981',
@@ -50,14 +91,7 @@ const App = () => {
     fillOpacity: 0.2,
   };
 
-  // Mock trend data for demonstration (in production, extract this from multi-year CSV rows grouped by pointId)
-  const trendData = [
-    { year: '2019', ndvi: 0.32, rain: 64 },
-    { year: '2020', ndvi: 0.39, rain: 72 },
-    { year: '2021', ndvi: 0.41, rain: 68 },
-    { year: '2022', ndvi: 0.45, rain: 81 },
-    { year: '2023', ndvi: activeFarm?.predicted_ndvi || activeFarm?.crop_health_score / 100 || 0.43, rain: 76 },
-  ];
+  // Mock trend data deleted. Using trendData state updated by useEffect.
 
   if (!geoData || farmData.length === 0) {
     return (

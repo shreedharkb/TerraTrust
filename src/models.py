@@ -13,10 +13,10 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, r2_score
-from xgboost import XGBRegressor
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
+from xgboost import XGBRegressor, XGBClassifier
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config import *
@@ -146,16 +146,150 @@ def train_ndvi_predictor(df):
 
 
 # ============================================================
+# Model: Soil Suitability Classifier
+# ============================================================
+
+def train_soil_classifier(df):
+    """
+    Train a Classification model to predict Soil Suitability 
+    based on ground parameters.
+    """
+    print("\n" + "=" * 60)
+    print("MODEL: Soil Suitability Classifier")
+    print("=" * 60)
+    
+    features = ['pH', 'nitrogen_g_per_kg', 'clay_pct', 'sand_pct', 'silt_pct']
+    
+    # Check if we successfully merged soil_suitability_label from land_records.csv
+    # if not, derive it from soil_suitability_score
+    if 'soil_suitability_label' in df.columns and not df['soil_suitability_label'].isnull().all():
+        target = 'soil_suitability_label'
+    else:
+        target = 'derived_soil_label'
+        # Bin the score into categorical labels
+        bins = [0, 50, 75, 100]
+        labels = ['Unsuitable', 'Marginal', 'Suitable']
+        df[target] = pd.cut(df['soil_suitability_score'], bins=bins, labels=labels, include_lowest=True)
+
+    model_df = df[features + [target]].dropna()
+    print(f"  Training on {len(model_df)} valid coordinates.")
+    
+    if len(model_df) == 0:
+        print("  ❌ Not enough data to train soil classifier.")
+        return None
+
+    X = model_df[features]
+    y_raw = model_df[target]
+    
+    le = LabelEncoder()
+    y = le.fit_transform(y_raw)
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+    
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
+    model.fit(X_train_scaled, y_train)
+    pred = model.predict(X_test_scaled)
+    
+    acc = accuracy_score(y_test, pred)
+    print(f"\n  ✅ Soil Classifier Results:")
+    print(f"     Accuracy: {acc:.4f}")
+    
+    # Save model
+    model_artifacts = {
+        'model': model,
+        'scaler': scaler,
+        'label_encoder': le,
+        'features': features,
+        'accuracy': acc,
+    }
+    
+    model_path = os.path.join(MODELS_DIR, "soil_classifier_model.pkl")
+    joblib.dump(model_artifacts, model_path)
+    print(f"  💾 Saved soil classifier model to: {model_path}")
+    
+    return model_artifacts
+
+# ============================================================
+# Model: Water Availability Regressor
+# ============================================================
+
+def train_water_regressor(df):
+    """
+    Train a Regression model to predict Water Availability Score
+    based on ground/weather parameters.
+    """
+    print("\n" + "=" * 60)
+    print("MODEL: Water Availability Regressor")
+    print("=" * 60)
+    
+    features = ['avg_monthly_rainfall_mm', 'groundwater_depth_m', 'avg_root_zone_wetness', 'avg_humidity_pct']
+    target = 'water_availability_score'
+    
+    model_df = df[features + [target]].dropna()
+    print(f"  Training on {len(model_df)} valid coordinates.")
+    
+    if len(model_df) == 0:
+        print("  ❌ Not enough data to train water regressor.")
+        return None
+
+    X = model_df[features]
+    y = model_df[target]
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+    
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.05, random_state=42)
+    model.fit(X_train_scaled, y_train)
+    pred = model.predict(X_test_scaled)
+    
+    rmse = np.sqrt(mean_squared_error(y_test, pred))
+    print(f"\n  ✅ Water Regressor Results:")
+    print(f"     RMSE: {rmse:.4f}")
+    
+    # Save model
+    model_artifacts = {
+        'model': model,
+        'scaler': scaler,
+        'features': features,
+        'rmse': rmse,
+    }
+    
+    model_path = os.path.join(MODELS_DIR, "water_regressor_model.pkl")
+    joblib.dump(model_artifacts, model_path)
+    print(f"  💾 Saved water regressor model to: {model_path}")
+    
+    return model_artifacts
+
+# ============================================================
 # Generate Model Metrics Report
 # ============================================================
 
-def save_metrics_report(ndvi_model):
+def save_metrics_report(ndvi_model, soil_model, water_model):
     """Save a comprehensive metrics report for the LaTeX document."""
     report = {
         "ndvi_predictor": {
             "model": "XGBoost",
-            "rmse": round(ndvi_model.get('rmse', 0), 4),
-            "r2_score": round(ndvi_model.get('r2_score', 0), 4),
+            "rmse": round(ndvi_model.get('rmse', 0), 4) if ndvi_model else None,
+            "r2_score": round(ndvi_model.get('r2_score', 0), 4) if ndvi_model else None,
+        },
+        "soil_classifier": {
+            "model": "RandomForest",
+            "accuracy": round(soil_model.get('accuracy', 0), 4) if soil_model else None,
+        },
+        "water_regressor": {
+            "model": "XGBoost",
+            "rmse": round(water_model.get('rmse', 0), 4) if water_model else None,
         }
     }
     
@@ -181,11 +315,13 @@ def run_model_training():
     if df is None:
         return
     
-    # Step 2: Train honest predictive model
+    # Step 2: Train honest predictive models
     ndvi_model = train_ndvi_predictor(df)
+    soil_model = train_soil_classifier(df)
+    water_model = train_water_regressor(df)
     
     # Step 3: Save metrics report
-    report = save_metrics_report(ndvi_model)
+    report = save_metrics_report(ndvi_model, soil_model, water_model)
     
     print("\n" + "=" * 60)
     print("  ✅ ML PIPELINE EXECUTED STRICTLY UNDER ACADEMIC CONSTRAINTS")
