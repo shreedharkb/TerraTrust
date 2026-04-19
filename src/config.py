@@ -23,8 +23,9 @@ for d in [TABULAR_DIR, SATELLITE_DIR, PROCESSED_DIR, MODELS_DIR]:
 # ============================================================
 # KGIS Shapefile Paths
 # ============================================================
-DISTRICT_SHP = os.path.join(DATA_DIR, "District.shp")
-TALUK_SHP = os.path.join(DATA_DIR, "Taluk.shp")
+SHAPEFILES_DIR = os.path.join(DATA_DIR, "raw", "shapefiles")
+DISTRICT_SHP = os.path.join(SHAPEFILES_DIR, "District.shp")
+TALUK_SHP = os.path.join(SHAPEFILES_DIR, "Taluk.shp")
 
 # ============================================================
 # CRS Configuration

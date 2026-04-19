@@ -1,8 +1,0 @@
-============================================================
- TerraTrust — Model Evaluation Report
- Generated: 2026-04-19 17:41:11
- Dataset: karnataka_master_dataset.csv (26720 rows, 31 columns)
-============================================================
-
-
-⏱️  Evaluation completed in 1.8s

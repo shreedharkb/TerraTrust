@@ -10,7 +10,7 @@ Merges all real data sources into the final training dataset:
 
 Outputs:
   - data/processed/karnataka_master_dataset.csv (full training set)
-  - data/data_provenance.json (updated)
+  - data/processed/data_provenance.json (updated)
 """
 
 import os
@@ -31,33 +31,49 @@ DATA_DIR     = os.path.normpath(os.path.join(BASE_DIR, 'data'))
 SOIL_CSV      = os.path.join(TABULAR_DIR,   'karnataka_soil_data.csv')
 CLIMATE_CSV   = os.path.join(TABULAR_DIR,   'karnataka_climate_data.csv')
 GW_CSV        = os.path.join(TABULAR_DIR,   'karnataka_groundwater.csv')
-NDVI_CSV      = os.path.join(SATELLITE_DIR, 'karnataka_ndvi.csv')
+NDVI_CSV      = os.path.join(SATELLITE_DIR, 'karnataka_ndvi_real.csv')
 MASTER_CSV    = os.path.join(PROCESSED_DIR, 'karnataka_master_dataset.csv')
 
 
-# ─── Crop declared per taluk (static realistic mapping) ─────────
-TALUK_CROPS = {
-    # North Karnataka: Maize, Ragi, Cotton, Sunflower dominant
-    'Davanagere': 'Maize', 'Harihar': 'Maize', 'Channagiri': 'Ragi',
-    'Chikkodi': 'Sugarcane', 'Belagavi': 'Sugarcane', 'Athani': 'Sugarcane',
-    'Dharwad': 'Maize', 'Gadag': 'Sunflower', 'Raichur': 'Paddy',
-    'Raichur': 'Paddy', 'Maski': 'Paddy', 'Manvi': 'Cotton',
-    'Vijayapura': 'Cotton', 'Indi': 'Cotton',
-    'Mysuru': 'Paddy', 'Mandya': 'Sugarcane',
+# ─── Crop declared per taluk (mapped from district agro-climatic zones) ─────────
+# Load district mapping
+with open(os.path.join(BASE_DIR, 'src', 'taluk_dist_map.json'), 'r') as f:
+    TALUK_TO_DIST = json.load(f)
+
+DISTRICT_CROPS = {
+    # Zone 1 (North East Dry): Kalaburagi, Bidar, Yadgir, Raichur
+    'Kalaburgi': 'Tur', 'Bidar': 'Jowar', 'Yadgir': 'Cotton', 'Raichur': 'Cotton',
+    # Zone 2 (North Dry): Dharwad, Gadag, Haveri, Koppal
+    'Dharwad': 'Maize', 'Gadag': 'Groundnut', 'Haveri': 'Maize', 'Koppal': 'Cotton',
+    # Zone 3 (North Transition): Belagavi, Bagalkote, Vijayapura
+    'Belagavi': 'Sugarcane', 'Bagalkote': 'Jowar', 'Vijayapura': 'Maize',
+    # Zone 4 (Central Dry): Davanagere, Chitradurga, Tumakuru, Ballari, Vijayanagara
+    'Davanagere': 'Maize', 'Chitradurga': 'Sunflower', 'Tumakuru': 'Ragi', 'Ballari': 'Ragi', 'Vijayanagara': 'Maize',
+    # Zone 5 (Eastern Dry): Kolar, Chikkaballapura, Bengaluru Rural
+    'Kolara': 'Tomato', 'Chikkaballapura': 'Groundnut', 'Bengaluru (Rural)': 'Ragi',
+    # Zone 6 (Southern Dry): Mysuru, Chamarajanagara, Mandya
+    'Mysuru': 'Paddy', 'Chamarajanagara': 'Ragi', 'Mandya': 'Sugarcane',
+    # Zone 7 (Southern Transition): Hassan, Kodagu, Chikkamagaluru
+    'Hassan': 'Coffee', 'Kodagu': 'Coffee', 'Chikkamagaluru': 'Arecanut',
+    # Zone 8 (Hilly): Shivamogga, UK
+    'Shivamogga': 'Arecanut', 'Uttara Kannada': 'Pepper',
+    # Zone 9 (Coastal): Udupi, DK
+    'Udupi': 'Paddy', 'Dakshina Kannada': 'Coconut',
+    # Zone 10 (Bengaluru Urban): Mixed/Urban
+    'Bengaluru (Urban)': 'Mixed/Urban',
+    # Extras
+    'Bengaluru South': 'Ragi'
 }
 
 def get_declared_crop(taluk):
-    """Map taluk to dominant crop type."""
-    known = TALUK_CROPS.get(taluk)
-    if known:
-        return known
-    # Heuristic: coastal/wetland → Paddy, dry deccan → Cotton, rest → Maize
+    """Map taluk -> district -> dominant crop type."""
+    district = TALUK_TO_DIST.get(taluk)
+    if district in DISTRICT_CROPS:
+        return DISTRICT_CROPS[district]
+    
+    # Fallback to coastal vs dry regions heuristic
     if any(k in taluk for k in ['Mangaluru','Udupi','Sirsi','Bhatkal','Honnavar']):
         return 'Paddy'
-    if any(k in taluk for k in ['Vijayapura','Bijapur','Raichur','Yadgir','Kalaburagi']):
-        return 'Cotton'
-    if any(k in taluk for k in ['Mandya','Srirangapatna','Maddur']):
-        return 'Sugarcane'
     return 'Maize'
 
 
@@ -326,7 +342,7 @@ def build_master_dataset():
         "years": [2019, 2020, 2021, 2022, 2023],
         "features": list(master.columns)
     }
-    with open(os.path.join(DATA_DIR, 'data_provenance.json'), 'w') as f:
+    with open(os.path.join(PROCESSED_DIR, 'data_provenance.json'), 'w') as f:
         json.dump(provenance, f, indent=2)
 
     print(f"\n{'='*65}")
