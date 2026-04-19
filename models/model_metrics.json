@@ -1,22 +1,23 @@
 {
     "Model_A_NDVI": {
-        "training_time_seconds": 1.87,
-        "train_r2": 0.9556,
-        "test_r2": 0.8803,
-        "train_rmse": 0.0397,
-        "test_rmse": 0.0645,
-        "cv_5fold_mean": 0.8835,
-        "cv_5fold_std": 0.0022,
+        "training_time_seconds": 0.52,
+        "train_r2": 0.9532,
+        "test_r2": 0.8756,
+        "train_rmse": 0.0408,
+        "test_rmse": 0.0658,
+        "cv_5fold_mean": 0.8785,
+        "cv_5fold_std": 0.0033,
         "feature_importances": {
-            "clay_pct": 0.11028864979743958,
-            "sand_pct": 0.13408994674682617,
-            "pH": 0.1838880032300949,
-            "avg_monthly_rainfall_mm": 0.05994730442762375,
-            "groundwater_depth_m": 0.5117860436439514
+            "clay_pct": 0.09029091894626617,
+            "sand_pct": 0.12400727719068527,
+            "pH": 0.15786142647266388,
+            "avg_monthly_rainfall_mm": 0.058103255927562714,
+            "avg_root_zone_wetness": 0.08163557201623917,
+            "groundwater_depth_m": 0.4881015717983246
         }
     },
     "Model_B_Soil": {
-        "training_time_seconds": 0.9,
+        "training_time_seconds": 0.84,
         "train_accuracy": 0.9282,
         "test_accuracy": 0.9271,
         "test_precision": 0.9302,
@@ -43,41 +44,43 @@
         }
     },
     "Model_C_Water": {
-        "training_time_seconds": 0.83,
-        "train_r2": 0.9646,
-        "test_r2": 0.9578,
-        "train_rmse": 0.9335,
-        "test_rmse": 1.0258,
-        "cv_5fold_mean": 0.9568,
-        "cv_5fold_std": 0.002,
+        "training_time_seconds": 0.91,
+        "train_r2": 0.9663,
+        "test_r2": 0.9595,
+        "train_rmse": 0.9109,
+        "test_rmse": 1.0042,
+        "cv_5fold_mean": 0.9583,
+        "cv_5fold_std": 0.0022,
         "feature_importances": {
-            "avg_monthly_rainfall_mm": 0.05053164064884186,
-            "groundwater_depth_m": 0.9494683742523193
+            "avg_monthly_rainfall_mm": 0.050148725509643555,
+            "avg_root_zone_wetness": 0.0456399992108345,
+            "avg_humidity_pct": 0.06539826095104218,
+            "groundwater_depth_m": 0.8388130068778992
         }
     },
     "Model_D_Credit_Risk": {
-        "training_time_seconds": 0.25,
-        "train_accuracy": 0.9994,
-        "test_accuracy": 0.9993,
-        "test_precision": 0.9952,
-        "test_recall": 1.0,
-        "test_f1_score": 0.9976,
-        "cv_5fold_mean": 0.9988,
-        "cv_5fold_std": 0.0004,
+        "training_time_seconds": 0.26,
+        "train_accuracy": 0.9988,
+        "test_accuracy": 0.9968,
+        "test_precision": 0.981,
+        "test_recall": 0.9968,
+        "test_f1_score": 0.9888,
+        "cv_5fold_mean": 0.997,
+        "cv_5fold_std": 0.0006,
         "confusion_matrix": [
             [
-                3803,
-                3
+                3794,
+                12
             ],
             [
-                0,
-                622
+                2,
+                620
             ]
         ],
         "feature_importances": {
-            "soil_suitability_score": 0.17837071418762207,
-            "water_availability_score": 0.08654400706291199,
-            "ndvi_annual_mean": 0.7350852489471436
+            "soil_suitability_score": 0.25038930773735046,
+            "water_availability_score": 0.2664322853088379,
+            "predicted_ndvi": 0.48317843675613403
         },
         "class_names": {
             "0": "Bad/High Risk",

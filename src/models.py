@@ -125,7 +125,7 @@ def main():
     metrics_export = {}
 
     print("\n[1/4] Training Model A: NDVI Predictor (XGBoost GPU)")
-    feat_a = ['clay_pct', 'sand_pct', 'pH', 'avg_monthly_rainfall_mm', 'groundwater_depth_m']
+    feat_a = ['clay_pct', 'sand_pct', 'pH', 'avg_monthly_rainfall_mm', 'avg_root_zone_wetness', 'groundwater_depth_m']
     target_a = 'ndvi_annual_mean'
     
     if target_a not in df.columns and 'ndvi' in df.columns:
@@ -138,6 +138,7 @@ def main():
     metrics_export['Model_A_NDVI'] = eval_regressor(model_a, scaler_a.fit_transform(X_train_a), scaler_a.transform(X_test_a), y_train_a, y_test_a, feat_a)
     joblib.dump({'model': model_a, 'scaler': scaler_a}, os.path.join(MODELS_DIR, 'model_a_ndvi.pkl'))
 
+    df['predicted_ndvi'] = model_a.predict(scaler_a.transform(df[feat_a].values))
 
     print("\n[2/4] Training Model B: Soil Suitability Classifier (RandomForest)")
     feat_b = ['pH', 'nitrogen_g_per_kg', 'clay_pct', 'sand_pct', 'silt_pct']
@@ -155,7 +156,7 @@ def main():
 
 
     print("\n[3/4] Training Model C: Water Availability Regressor (XGBoost GPU)")
-    feat_c = ['avg_monthly_rainfall_mm', 'groundwater_depth_m']
+    feat_c = ['avg_monthly_rainfall_mm', 'avg_root_zone_wetness', 'avg_humidity_pct', 'groundwater_depth_m']
     target_c = 'water_availability_score'
     df_c = df[feat_c + [target_c]].dropna()
 
@@ -168,7 +169,7 @@ def main():
 
     print("\n[4/4] Training Model D: Credit Risk Classifier (XGBoost GPU)")
     df['loan_risk_binary'] = (df['credit_score'] >= 650).astype(int)
-    feat_d = ['soil_suitability_score', 'water_availability_score', target_a]
+    feat_d = ['soil_suitability_score', 'water_availability_score', 'predicted_ndvi']
     df_d = df[feat_d + ['loan_risk_binary']].dropna()
     y_d = df_d['loan_risk_binary'].values
     scale_pos_weight = max(1, (y_d == 0).sum() / max((y_d == 1).sum(), 1))
