@@ -81,7 +81,7 @@ def train_ndvi_predictor(df):
     print("=" * 60)
     t0 = time.time()
     
-    features = ['clay_pct', 'sand_pct', 'pH', 'avg_monthly_rainfall_mm', 'groundwater_depth_m']
+    features = ['clay_pct', 'sand_pct', 'pH', 'avg_monthly_rainfall_mm', 'avg_root_zone_wetness']
     target = 'ndvi'
     
     # Clean data
@@ -235,7 +235,7 @@ def train_water_regressor(df):
     print("=" * 60)
     t0 = time.time()
     
-    features = ['avg_monthly_rainfall_mm', 'groundwater_depth_m', 'avg_root_zone_wetness', 'avg_humidity_pct']
+    features = ['avg_monthly_rainfall_mm', 'avg_root_zone_wetness', 'avg_humidity_pct']
     target = 'water_availability_score'
     
     model_df = df[features + [target]].dropna()

@@ -136,9 +136,9 @@ def compute_ndvi_from_scenes(scenes, bbox=None):
         
     ndvi_records = []
     
-    # Ensure signed items for download access
-    signed_items = planetary_computer.sign(scenes)
-    
+    # Sign items directly one by one for Microsoft Planetary Computer
+    signed_items = [planetary_computer.sign(item) for item in scenes]
+
     try:
         print(f"  Loading pixel data for {len(signed_items)} scenes... this may take a moment.")
         # Load the data using odc.stac. Resolution is set slightly lower to prevent RAM issues on large bboxes.

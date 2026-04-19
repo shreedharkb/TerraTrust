@@ -209,7 +209,7 @@ class VisualCreditScorer:
                 'soil_ph': farm_data.get('pH', None),
                 'nitrogen': farm_data.get('nitrogen_g_per_kg', None),
                 'rainfall_mm': farm_data.get('avg_monthly_rainfall_mm', None),
-                'groundwater_depth': farm_data.get('groundwater_depth_m', None),
+                'root_zone_wetness': farm_data.get('avg_root_zone_wetness', None),
                 'coordinates': {
                     'lat': farm_data.get('latitude', None),
                     'lon': farm_data.get('longitude', None)

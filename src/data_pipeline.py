@@ -48,8 +48,10 @@ def load_taluk_boundaries():
     if all_taluks.empty:
         raise ValueError("No taluks found in shapefile!")
 
-    all_taluks['centroid_lat'] = all_taluks.geometry.centroid.y
-    all_taluks['centroid_lon'] = all_taluks.geometry.centroid.x
+    # Calculate centroid safely using a projected CRS (Web Mercator) and convert back to WGS84
+    projected_centroids = all_taluks.to_crs(epsg=3857).centroid.to_crs(epsg=4326)
+    all_taluks['centroid_lat'] = projected_centroids.y
+    all_taluks['centroid_lon'] = projected_centroids.x
 
     # Derive a 'district' column from KGISDistri code if available, else empty
     if 'KGISDist_1' in all_taluks.columns:
@@ -97,19 +99,17 @@ def fetch_soil_data(lat, lon):
 def fetch_climate_data(lat, lon, year_str):
     """Fetch genuine climate data from NASA POWER API for a specific year."""
     params = {
-        "parameters": "PRECTOTCORR,T2M,T2M_MAX,T2M_MIN,RH2M,ALLSKY_SFC_SW_DWN,GWETROOT",
+        "parameters": "PRECTOTCORR,T2M_MAX,T2M_MIN,RH2M,GWETROOT",
         "community": "AG",
         "longitude": lon, "latitude": lat,
-        "start": year_str, "end": year_str,  # Year-only format
+        "start": year_str, "end": year_str,
         "format": "JSON"
     }
     session = get_retry_session()
     try:
-        r = session.get(NASA_POWER_API, params=params, timeout=60)
+        r = session.get("https://power.larc.nasa.gov/api/temporal/monthly/point", params=params, timeout=60)
         if r.status_code == 200:
             return r.json().get('properties', {}).get('parameter', {})
-        else:
-            print(f"    NASA POWER HTTP {r.status_code}")
     except Exception as e:
         print(f"    NASA POWER error: {e}")
     return None
@@ -164,16 +164,16 @@ def generate_synthetic_bank_records(df):
     farm_size = np.clip(rng.lognormal(mean=1.2, sigma=0.7, size=n), 1.0, 15.0).round(1)
 
     # Historical yield: correlated with soil and water scores; adds noise
-    soil_score  = df.get('soil_suitability_score',  pd.Series(np.full(n, 70.0))).fillna(70.0).values
-    water_score = df.get('water_availability_score', pd.Series(np.full(n, 60.0))).fillna(60.0).values
+    soil_score  = df.get('soil_suitability_score',  pd.Series(np.full(n, 70.0))).fillna(70.0).astype(float).values
+    water_score = df.get('water_availability_score', pd.Series(np.full(n, 60.0))).fillna(60.0).astype(float).values
     yield_base  = 0.05 * soil_score + 0.04 * water_score  # ~9 quintals at average scores
-    historical_yield = np.clip(yield_base + rng.normal(0, 1.5, size=n), 0.5, 30.0).round(2)
+    historical_yield = np.clip(yield_base + rng.normal(0, 1.5, size=n), 0.5, 30.0).astype(float).round(2)
 
     # Repayment status: 1 = good repayment, 0 = default
     # Default probability rises as soil/water/farm capacity falls
-    ndvi_score  = df.get('ndvi', pd.Series(np.full(n, 0.45))).fillna(0.45).values * 100
+    ndvi_score  = df.get('ndvi', pd.Series(np.full(n, 0.45))).fillna(0.45).astype(float).values * 100
     composite   = 0.4 * ndvi_score + 0.3 * soil_score + 0.3 * water_score  # 0-100
-    prob_repay  = np.clip(composite / 100.0, 0.05, 0.95)
+    prob_repay  = np.clip(composite / 100.0, 0.05, 0.95).astype(float)
     repayment_status = rng.binomial(1, prob_repay, size=n)
 
     df = df.copy()
@@ -261,7 +261,7 @@ def run_full_data_pipeline():
         print(f"  Saved: {soil_csv}")
         print(f"  ⏱️  Step 3 completed in {step3_elapsed:.1f}s")
 
-    # Step 4: Fetch climate data from NASA POWER (Parallelized)
+# Step 4: Fetch climate data from NASA POWER (Fast Regional Override)
     climate_csv = os.path.join(TABULAR_DIR, "karnataka_climate_data.csv")
     if os.path.exists(climate_csv):
         print("\n" + "=" * 60)
@@ -272,47 +272,75 @@ def run_full_data_pipeline():
     else:
         step4_start = time.time()
         print("\n" + "=" * 60)
-        print("STEP 4: Fetching Climate Data (Parallelized - 10 Workers)")
-        print("  Source: https://power.larc.nasa.gov/")
-        print(f"  Total records to fetch: {len(expanded_df)}")
+        print("STEP 4: Fetching Climate Data (Fast Regional Bounding Box)")
+        print("  Source: https://power.larc.nasa.gov/api/temporal/monthly/regional")
         print("=" * 60)
+
+        # Karnataka Bounding Box
+        min_lat, max_lat = 11.0, 19.0
+        min_lon, max_lon = 74.0, 79.0
         
+        session = get_retry_session()
+        params_list = ['PRECTOTCORR', 'T2M_MAX', 'T2M_MIN', 'RH2M', 'GWETROOT']
+        grid = {} # (lon, lat) -> {year: {var: val}}
+        
+        for param in params_list:
+            print(f"  Fetching NASA {param} for Karnataka...", end=" ", flush=True)
+            url = f"https://power.larc.nasa.gov/api/temporal/monthly/regional?latitude-min={min_lat}&latitude-max={max_lat}&longitude-min={min_lon}&longitude-max={max_lon}&start=2019&end=2023&community=AG&parameters={param}&format=JSON"
+            try:
+                r = session.get(url, timeout=120)
+                if r.status_code == 200:
+                    features = r.json().get('features', [])
+                    for f in features:
+                        lon, lat, _ = f['geometry']['coordinates']
+                        vals = f['properties']['parameter'][param]
+                        
+                        lon = round(lon, 1)
+                        lat = round(lat, 1)
+                        if (lon, lat) not in grid:
+                            grid[(lon, lat)] = {y: {} for y in range(2019, 2024)}
+                        
+                        for y in range(2019, 2024):
+                            y_vals = [vals.get(f"{y}{m:02d}", -999) for m in range(1, 13)]
+                            y_vals = [v for v in y_vals if v != -999]
+                            avg = round(np.mean(y_vals), 2) if y_vals else None
+                            grid[(lon, lat)][y][param] = avg
+                    print("OK")
+                else:
+                    print(f"FAILED (HTTP {r.status_code})")
+            except Exception as e:
+                print(f"FAILED ({e})")
+                
+        print(f"  Mapping {len(expanded_df)} points to regional NASA grid...")
         climate_records = []
         
-        def fetch_worker(row_tuple):
-            idx, row = row_tuple
-            pid_yr = row['point_id_yr']
-            lat, lon = row['latitude'], row['longitude']
-            year = row['year']
+        # Extract native grid coordinates
+        grid_lons = np.array([k[0] for k in grid.keys()])
+        grid_lats = np.array([k[1] for k in grid.keys()])
+        
+        for _, row in expanded_df.iterrows():
+            p_lon, p_lat, year = row['longitude'], row['latitude'], row['year']
             
-            clim = fetch_climate_data(lat, lon, str(year))
-            if clim:
-                try:
-                    # Flatten NASA response structure
-                    p = {k: list(v.values())[0] for k, v in clim.items()}
-                    rec = {
-                        'point_id_yr': pid_yr,
-                        'year': year,
-                        'avg_monthly_rainfall_mm': round(np.mean([v for v in p.values() if v is not None and v != -999]), 2) if p else None,
-                        'max_temp_c': p.get('T2M_MAX'),
-                        'min_temp_c': p.get('T2M_MIN'),
-                        'avg_humidity_pct': p.get('RH2M'),
-                        'avg_root_zone_wetness': p.get('GWETROOT'),
-                        'api_source': 'NASA POWER'
-                    }
-                    return rec
-                except Exception: return {'point_id_yr': pid_yr, 'year': year}
-            return {'point_id_yr': pid_yr, 'year': year}
-
-        # Use ThreadPoolExecutor for 10x speedup
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            total = len(expanded_df)
-            futures = [executor.submit(fetch_worker, row) for row in expanded_df.iterrows()]
-            
-            for i, future in enumerate(concurrent.futures.as_completed(futures)):
-                climate_records.append(future.result())
-                if (i + 1) % 50 == 0 or i + 1 == total:
-                    print(f"  Progress: {i+1}/{total} ({(i+1)/total*100:.1f}%)", end="\r", flush=True)
+            # Snap to closest native 0.5-deg grid node
+            if len(grid_lons) > 0:
+                dist = (grid_lons - p_lon)**2 + (grid_lats - p_lat)**2
+                idx = dist.argmin()
+                snap_lon, snap_lat = grid_lons[idx], grid_lats[idx]
+                clim = grid[(snap_lon, snap_lat)].get(year, {})
+            else:
+                clim = {}
+                
+            rec = {
+                'point_id_yr': row['point_id_yr'],
+                'year': year,
+                'avg_monthly_rainfall_mm': clim.get('PRECTOTCORR'),
+                'max_temp_c': clim.get('T2M_MAX'),
+                'min_temp_c': clim.get('T2M_MIN'),
+                'avg_humidity_pct': clim.get('RH2M'),
+                'avg_root_zone_wetness': clim.get('GWETROOT'),
+                'api_source': 'NASA POWER (Regional 0.5° Grid)'
+            }
+            climate_records.append(rec)
         
         print("\n  Finalizing climate dataset...")
         climate_df = pd.DataFrame(climate_records)
@@ -336,34 +364,14 @@ def run_full_data_pipeline():
     # Merge climate
     climate_merge = climate_df[[c for c in climate_df.columns if c not in ['api_source', 'api_url', 'year']]]
     master = master.merge(climate_merge, on='point_id_yr', how='left')
-    
-    print("  Generating Statewide Groundwater & Land Intelligence...")
-    
-    # 3. Infer Groundwater Depth (NASA Root-Zone Physic-Informed)
-    # Higher root zone wetness correlates to shallower groundwater across Karnataka
-    avg_wetness = master['avg_root_zone_wetness'].mean() if 'avg_root_zone_wetness' in master.columns else 0.5
-    master['groundwater_depth_m'] = 20.0 - (master.get('avg_root_zone_wetness', 0.5) - avg_wetness) * 25.0
-    master['groundwater_depth_m'] = master['groundwater_depth_m'].clip(lower=5.0, upper=80.0).round(1)
-    
+
+    print("  Adding declared crop data...")
+    # Simulate "Declared Crop" as manual user input
+    master['declared_crop'] = np.random.default_rng(42).choice(['Maize', 'Paddy', 'Cotton', 'Ragi'], size=len(master))
+
     # 4. Physical Scoring Logic
     master['soil_suitability_score'] = master.apply(_soil_score, axis=1)
     master['water_availability_score'] = master.apply(_water_score, axis=1)
-    
-
-    # INTELLIGENT STATEWIDE INFERENCE: Fill missing Groundwater and Land Record data
-    # We use the real Davangere samples to project values across the whole state using physics/similarity
-    print("  Intelligently inferring Statewide data (Groundwater & Land Records)...")
-    
-    # 1. Infer Groundwater Depth
-    # Based on the physics that NASA Root Zone Wetness is correlated with Groundwater depth
-    avg_wetness = master['avg_root_zone_wetness'].mean()
-    # Baseline Davangere avg is ~15m depth. If wetness is higher, depth is shallower.
-    master['groundwater_depth_m'] = 15.0 - (master['avg_root_zone_wetness'] - avg_wetness) * 20.0
-    master['groundwater_depth_m'] = master['groundwater_depth_m'].clip(lower=2.0, upper=60.0) # Physical limits
-    
-    # 2. Project Crop Types (Randomly distributed based on common Karnataka crops)
-    karnataka_crops = ['Maize', 'Paddy', 'Cotton', 'Arecanut', 'Sugarcane', 'Ragi']
-    master['declared_crop'] = np.random.choice(karnataka_crops, size=len(master))
     
     # Generate and merge synthetic bank records (physics-driven for ML training)
     master = generate_synthetic_bank_records(master)
@@ -431,14 +439,4 @@ def _water_score(row):
         if hum > 60: score += 10
         elif hum < 40: score -= 10
         
-    gw_depth = row.get('groundwater_depth_m')
-    if gw_depth and not pd.isna(gw_depth):
-        if gw_depth < 10: score += 15
-        elif gw_depth < 20: score += 5
-        else: score -= 10
-        
-    return max(0, min(100, round(score, 1)))
 
-
-if __name__ == "__main__":
-    run_full_data_pipeline()
