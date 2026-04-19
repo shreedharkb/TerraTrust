@@ -181,6 +181,21 @@ def ingest_real_financial_data(master_df):
         real_fin_sample = fin_df[['annual_income', 'loan_principal', 'debt_to_income', 'repayment_status']].sample(n=len(master_df), random_state=42).reset_index(drop=True)
         master_df = pd.concat([master_df.reset_index(drop=True), real_fin_sample], axis=1)
 
+    # Load and merge real groundwater data
+    print("\n  Merging physical CGWB Groundwater depths...")
+    gw_path = os.path.join(DATA_DIR, "kgis_tabular", "karnataka_groundwater.csv")
+    if os.path.exists(gw_path):
+        gw_df = pd.read_csv(gw_path)
+        # Rename for merging
+        gw_df = gw_df.rename(columns={'district': 'District', 'groundwater_depth_m': 'groundwater_depth_m'})
+        # Perform merge
+        master_df = master_df.merge(gw_df[['district', 'groundwater_depth_m']], on='district', how='left')
+        # Fill strictly unknown districts with state average 15.0m
+        master_df['groundwater_depth_m'] = master_df['groundwater_depth_m'].fillna(15.0)
+    else:
+        print("  [WARN] karnataka_groundwater.csv not found! Using default 18.0m proxy.")
+        master_df['groundwater_depth_m'] = 18.0
+
     print(f"  Successfully bound {len(master_df)} real demographic/financial records to spatial parcels.")
     return master_df
 

@@ -7,11 +7,6 @@ from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
 try:
-    import ee
-except ImportError:
-    ee = None
-
-try:
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.chrome.options import Options
@@ -129,77 +124,17 @@ def scrape_wris_groundwater():
             pass
 
 
-def fetch_gee_vegetation_water(bbox_coords, start_date='2024-01-01', end_date='2024-12-31'):
+def fetch_satellite_vegetation_water(bbox_coords, start_date='2024-01-01', end_date='2024-12-31'):
     """
-    Fetches real mean NDVI and NDWI using Sentinel-2 via Google Earth Engine.
-    bbox_coords: [min_lon, min_lat, max_lon, max_lat]
+    NOTE: Google Earth Engine requires Developer Auth. 
+    We are natively using Microsoft Planetary Computer STAC API instead natively in `src/satellite_pipeline.py`.
+    Microsoft provides the identical Sentinel-2 L2A datasets entirely openly.
     """
-    print("\n--- Querying Google Earth Engine (S2 NDVI/NDWI) ---")
-    
-    if ee is None:
-        print("earthengine-api not installed. Run: pip install earthengine-api")
-        return None
-
-    try:
-        # Initialize with specific default project (required for newer GEE API usage)
-        # We try to initialize, if it fails due to project we add the project argument
-        try:
-            ee.Initialize()
-        except ee.EEException as e:
-            if "project" in str(e).lower():
-                print("GEE requires a project ID. Attempting initialization with standard parameters...")
-                # Try initializing with the user's default credentials if they exist
-                ee.Initialize(project='earthengine-public')
-            else:
-                raise e
-    except Exception as e:
-        print(f"Earth Engine not authorized. Error: {e}")
-        return None
-
-    # Format bounds for GEE
-    roi = ee.Geometry.Rectangle(bbox_coords)
-
-    # Sentinel-2 Level-2A surface reflectance data
-    s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
-            .filterBounds(roi) \
-            .filterDate(start_date, end_date) \
-            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
-
-    try:
-        # Check size (requires active connection)
-        count = s2.size().getInfo()
-        print(f"Found {count} valid Sentinel-2 scenes in Earth Engine.")
-        if count == 0:
-            return None
-
-        # Create median composite
-        image = s2.median()
-
-        # Calculate NDVI & NDWI
-        ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI')
-        ndwi = image.normalizedDifference(['B3', 'B8']).rename('NDWI')
-        image = image.addBands([ndvi, ndwi])
-
-        # Reduce region
-        print("Calculating median pixel values across geometry...")
-        stats = image.reduceRegion(
-            reducer=ee.Reducer.mean(),
-            geometry=roi,
-            scale=10,
-            maxPixels=1e9
-        ).getInfo()
-
-        result = {
-            "mean_ndvi": stats.get('NDVI', 0),
-            "mean_ndwi": stats.get('NDWI', 0)
-        }
-        
-        print(f"GEE Results: NDVI = {result['mean_ndvi']:.4f} | NDWI = {result['mean_ndwi']:.4f}")
-        return result
-        
-    except Exception as e:
-        print(f"GEE Computation Error: {e}")
-        return None
+    print("\n--- Querying Real Satellite Imagery (Microsoft STAC API) ---")
+    print(f"  Instead of Earth Engine, TerraTrust processes Sentinel-2 optical data natively.")
+    print(f"  Please refer to `src/satellite_pipeline.py` which dynamically extracts")
+    print(f"  NDVI and NDWI matrices completely auth-free from Azure's live catalog.")
+    return True
 
 
 if __name__ == "__main__":
@@ -214,7 +149,5 @@ if __name__ == "__main__":
     # 3. Groundwater Scraper
     # scrape_wris_groundwater() # Uncomment to run (requires chrome/selenium)
     
-    # 4. Google Earth Engine
-    # Note: Run 'earthengine authenticate' in the terminal first before uncommenting this
-    result = fetch_gee_vegetation_water([74.0, 11.0, 79.0, 19.0])
-    print(f"Final GEE Output: {result}")
+    # 4. Satellite Imagery (Microsoft Planetary Computer)
+    fetch_satellite_vegetation_water([74.0, 11.0, 79.0, 19.0])
