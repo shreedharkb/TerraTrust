@@ -151,15 +151,6 @@ if 'annual_income' in master.columns:
 print(f"\nSample rows:")
 print(master.head(2).to_string())
 
-# ========== 8. satellite_summary.json ==========
-print("\n" + "-" * 50)
-print("FILE: satellite/satellite_summary.json")
-print("-" * 50)
-import json
-with open("data/satellite/satellite_summary.json") as f:
-    summary = json.load(f)
-print(json.dumps(summary, indent=2))
-
 print("\n" + "=" * 70)
 print("AUDIT COMPLETE")
 print("=" * 70)
