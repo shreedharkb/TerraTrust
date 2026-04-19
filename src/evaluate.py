@@ -341,9 +341,14 @@ def evaluate_credit_risk_classifier(df, report_lines):
     if 'ndvi' not in df.columns and 'predicted_ndvi' in df.columns:
         df = df.rename(columns={'predicted_ndvi': 'ndvi'})
 
-    model_df = df[features + ['repayment_status']].dropna()
+    if 'loan_risk_category' in df.columns:
+        df['loan_risk_binary'] = df['loan_risk_category'].isin(['Low Risk', 'Very Low Risk']).astype(int)
+    else:
+        df['loan_risk_binary'] = (df['credit_score'] >= 650).astype(int)
+        
+    model_df = df[features + ['loan_risk_binary']].dropna()
     X = model_df[features]
-    y = model_df['repayment_status'].astype(int)
+    y = model_df['loan_risk_binary'].astype(int)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     X_test_scaled = scaler.transform(X_test)

@@ -103,7 +103,7 @@ def train_ndvi_predictor(df):
     model = XGBRegressor(
         n_estimators=300, max_depth=6, learning_rate=0.05,
         random_state=42, reg_alpha=0.1, reg_lambda=1.0,
-        tree_method='gpu_hist', device='cuda'
+        tree_method='hist', device='cuda'
     )
     model.fit(X_train_scaled, y_train)
     pred = model.predict(X_test_scaled)
@@ -256,7 +256,7 @@ def train_water_regressor(df):
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.05, random_state=42, tree_method='gpu_hist', device='cuda')
+    model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.05, random_state=42, tree_method='hist', device='cuda')
     model.fit(X_train_scaled, y_train)
     pred = model.predict(X_test_scaled)
     
@@ -294,12 +294,15 @@ def train_credit_risk_classifier(df):
     print("=" * 60)
     t0 = time.time()
 
-    features = ['ndvi', 'soil_suitability_score', 'water_availability_score', 'farm_size']
-    target   = 'repayment_status'
+    features = ['ndvi', 'soil_suitability_score', 'water_availability_score']
+    target   = 'loan_risk_binary'
 
     # Fallback: if ndvi column not present, try predicted_ndvi
     if 'ndvi' not in df.columns and 'predicted_ndvi' in df.columns:
         df = df.rename(columns={'predicted_ndvi': 'ndvi'})
+        
+    # Create binary target from credit_score
+    df[target] = (df['credit_score'] >= 650).astype(int)
 
     model_df = df[features + [target]].dropna()
     print(f"  Training on {len(model_df)} valid records.")
@@ -324,7 +327,7 @@ def train_credit_risk_classifier(df):
         n_estimators=200, max_depth=5, learning_rate=0.05,
         scale_pos_weight=scale_pos_weight,
         use_label_encoder=False, eval_metric='logloss',
-        random_state=42, tree_method='gpu_hist', device='cuda'
+        random_state=42, tree_method='hist', device='cuda'
     )
     model.fit(X_train_scaled, y_train)
     pred      = model.predict(X_test_scaled)

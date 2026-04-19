@@ -1,0 +1,19 @@
+{
+  "ndvi_predictor": {
+    "model": "XGBoost",
+    "rmse": 0.0022,
+    "r2_score": 0.8874
+  },
+  "soil_classifier": {
+    "model": "RandomForest",
+    "accuracy": 1.0
+  },
+  "water_regressor": {
+    "model": "XGBoost",
+    "rmse": 2.2386
+  },
+  "credit_risk_classifier": {
+    "model": "XGBoost",
+    "accuracy": 1.0
+  }
+}
