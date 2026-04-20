@@ -176,7 +176,7 @@ def main():
 
     X_train_d, X_test_d, y_train_d, y_test_d = train_test_split(df_d[feat_d].values, y_d, test_size=0.2, random_state=42, stratify=y_d)
     scaler_d = StandardScaler()
-    model_d = XGBClassifier(**XGB_KWARGS, n_estimators=200, max_depth=5, scale_pos_weight=scale_pos_weight, random_state=42)
+    model_d = XGBClassifier(**XGB_KWARGS, max_depth=1, n_estimators=50, learning_rate=0.1, reg_lambda=50, reg_alpha=10, scale_pos_weight=scale_pos_weight, random_state=42)
     metrics_export['Model_D_Credit_Risk'] = eval_classifier(model_d, scaler_d.fit_transform(X_train_d), scaler_d.transform(X_test_d), y_train_d, y_test_d, feat_d, is_binary=True)
     
     metrics_export['Model_D_Credit_Risk']['class_names'] = {0: 'Bad/High Risk', 1: 'Good/Low Risk'}

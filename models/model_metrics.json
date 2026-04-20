@@ -1,6 +1,6 @@
 {
     "Model_A_NDVI": {
-        "training_time_seconds": 0.52,
+        "training_time_seconds": 0.62,
         "train_r2": 0.9532,
         "test_r2": 0.8756,
         "train_rmse": 0.0408,
@@ -17,7 +17,7 @@
         }
     },
     "Model_B_Soil": {
-        "training_time_seconds": 0.84,
+        "training_time_seconds": 0.88,
         "train_accuracy": 0.9282,
         "test_accuracy": 0.9271,
         "test_precision": 0.9302,
@@ -44,7 +44,7 @@
         }
     },
     "Model_C_Water": {
-        "training_time_seconds": 0.91,
+        "training_time_seconds": 0.76,
         "train_r2": 0.9663,
         "test_r2": 0.9595,
         "train_rmse": 0.9109,
@@ -59,28 +59,28 @@
         }
     },
     "Model_D_Credit_Risk": {
-        "training_time_seconds": 0.26,
-        "train_accuracy": 0.9988,
-        "test_accuracy": 0.9968,
-        "test_precision": 0.981,
-        "test_recall": 0.9968,
-        "test_f1_score": 0.9888,
-        "cv_5fold_mean": 0.997,
-        "cv_5fold_std": 0.0006,
+        "training_time_seconds": 0.07,
+        "train_accuracy": 0.9298,
+        "test_accuracy": 0.9302,
+        "test_precision": 0.9312,
+        "test_recall": 0.9985,
+        "test_f1_score": 0.9637,
+        "cv_5fold_mean": 0.9299,
+        "cv_5fold_std": 0.0008,
         "confusion_matrix": [
             [
-                3794,
-                12
+                17,
+                303
             ],
             [
-                2,
-                620
+                6,
+                4102
             ]
         ],
         "feature_importances": {
-            "soil_suitability_score": 0.25038930773735046,
-            "water_availability_score": 0.2664322853088379,
-            "predicted_ndvi": 0.48317843675613403
+            "soil_suitability_score": 0.494980126619339,
+            "water_availability_score": 0.18059684336185455,
+            "predicted_ndvi": 0.32442301511764526
         },
         "class_names": {
             "0": "Bad/High Risk",
