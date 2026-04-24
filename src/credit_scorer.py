@@ -28,7 +28,7 @@ class VisualCreditScorer:
     def load_models(self):
         """Load the ML models."""
         # NDVI Predictor
-        path_ndvi = os.path.join(MODELS_DIR, "ndvi_predictor_model.pkl")
+        path_ndvi = os.path.join(MODELS_DIR, "model_a_ndvi.pkl")
         if os.path.exists(path_ndvi):
             self.models['ndvi_predictor'] = joblib.load(path_ndvi)
             print(f"  ✅ Loaded NDVI Predictor model")
@@ -36,7 +36,7 @@ class VisualCreditScorer:
             print(f"  ⚠️ NDVI Predictor model not found at {path_ndvi}")
 
         # Soil Classifier
-        path_soil = os.path.join(MODELS_DIR, "soil_classifier_model.pkl")
+        path_soil = os.path.join(MODELS_DIR, "model_b_soil.pkl")
         if os.path.exists(path_soil):
             self.models['soil_classifier'] = joblib.load(path_soil)
             print(f"  ✅ Loaded Soil Classifier model")
@@ -44,12 +44,12 @@ class VisualCreditScorer:
             print(f"  ⚠️ Soil Classifier model not found at {path_soil}")
 
         # Water Regressor
-        path_water = os.path.join(MODELS_DIR, "water_regressor_model.pkl")
+        path_water = os.path.join(MODELS_DIR, "model_c_water.pkl")
         if os.path.exists(path_water):
             self.models['water_regressor'] = joblib.load(path_water)
             print(f"  ✅ Loaded Water Regressor model")
         # Credit Risk Classifier (final decision engine)
-        path_credit = os.path.join(MODELS_DIR, "credit_risk_classifier_model.pkl")
+        path_credit = os.path.join(MODELS_DIR, "model_d_credit.pkl")
         if os.path.exists(path_credit):
             self.models['credit_risk_classifier'] = joblib.load(path_credit)
             print(f"  ✅ Loaded Credit Risk Classifier model")
@@ -59,7 +59,7 @@ class VisualCreditScorer:
     def predict_ndvi(self, farm_data):
         """Predict NDVI from Ground Features using XGBoost."""
         if 'ndvi_predictor' not in self.models:
-            return farm_data.get('ndvi', 0.45)
+            return farm_data.get('crop_health', 1)
             
         artifacts = self.models['ndvi_predictor']
         model = artifacts['model']
@@ -72,36 +72,31 @@ class VisualCreditScorer:
             pred = model.predict(X_scaled)[0]
             return float(np.clip(pred, 0, 1))
         except:
-            return farm_data.get('ndvi', 0.45)
+            return farm_data.get('crop_health', 1)
             
     def compute_soil_score(self, farm_data):
         """Use ML Classifier to determine soil suitability score."""
         if 'soil_classifier' not in self.models:
             # Fallback if model missing
-            return 50.0
+            return 1.0
             
         artifacts = self.models['soil_classifier']
         model = artifacts['model']
         scaler = artifacts['scaler']
-        le = artifacts['label_encoder']
         features = artifacts['features']
         
         X = np.array([[farm_data.get(f, 0) for f in features]])
         try:
             X_scaled = scaler.transform(X)
-            pred_idx = model.predict(X_scaled)[0]
-            label = le.inverse_transform([pred_idx])[0]
-            
-            # Map labels to numeric scores
-            score_map = {'Suitable': 95.0, 'Marginal': 60.0, 'Unsuitable': 30.0}
-            return float(score_map.get(label, 50.0))
+            pred = model.predict(X_scaled)[0]
+            return float(pred)
         except:
-            return 50.0
+            return 1.0
 
     def compute_water_score(self, farm_data):
         """Use ML Regressor to determine water availability score."""
         if 'water_regressor' not in self.models:
-            return 50.0
+            return 15.0
             
         artifacts = self.models['water_regressor']
         model = artifacts['model']
@@ -112,20 +107,18 @@ class VisualCreditScorer:
         try:
             X_scaled = scaler.transform(X)
             pred = model.predict(X_scaled)[0]
-            return float(np.clip(pred, 0, 100))
+            return float(pred)
         except:
-            return 50.0
+            return 15.0
         
-    def predict_credit_risk(self, ndvi_score, soil_score, water_score, farm_size):
+    def predict_credit_risk(self, farm_data, pred_crop_health, pred_soil_q, pred_water_depth):
         """
         Use the XGBoost Credit Risk Classifier to predict repayment probability.
-        Returns (repay_probability [0-1], predicted_label [0/1]).
+        Returns (repay_probability [0-1], predicted_label).
         """
         if 'credit_risk_classifier' not in self.models:
-            # Fallback: weighted average if model not trained yet
-            raw = (ndvi_score * 0.40) + (water_score * 0.30) + (soil_score * 0.30)
-            prob = round(max(0, min(100, raw)), 1) / 100.0
-            return prob, int(prob >= 0.5)
+            # Fallback
+            return 0.5, 'Moderate'
 
         artifacts = self.models['credit_risk_classifier']
         model    = artifacts['model']
@@ -134,20 +127,32 @@ class VisualCreditScorer:
 
         # Map feature names to values
         feature_vals = {
-            'ndvi':                    ndvi_score / 100.0,   # model trained on raw ndvi (0-1)
-            'soil_suitability_score':  soil_score,
-            'water_availability_score': water_score,
-            'farm_size':               farm_size,
+            'pred_crop_health': pred_crop_health,
+            'pred_soil_q': pred_soil_q,
+            'pred_water_depth': pred_water_depth,
+            'aridity_index': farm_data.get('aridity_index', 0),
+            'sand_clay_ratio': farm_data.get('sand_clay_ratio', 0),
+            'thermal_stress': farm_data.get('thermal_stress', 0),
+            'avg_monthly_rainfall_mm': farm_data.get('avg_monthly_rainfall_mm', 0),
+            'avg_root_zone_wetness': farm_data.get('avg_root_zone_wetness', 0)
         }
         X = np.array([[feature_vals.get(f, 0) for f in features]])
         try:
             X_scaled = scaler.transform(X)
-            prob  = float(model.predict_proba(X_scaled)[0][1])   # P(good repayment)
-            label = int(model.predict(X_scaled)[0])
+            label_idx = model.predict(X_scaled)[0]
+            label = artifacts['encoder'].inverse_transform([label_idx])[0]
+            
+            # Map risk level to a probability score for legacy compatibility
+            if label == 'Low':
+                prob = 0.85
+            elif label == 'Moderate':
+                prob = 0.60
+            else:
+                prob = 0.30
+                
             return prob, label
         except Exception as e:
-            raw = (ndvi_score * 0.40 + water_score * 0.30 + soil_score * 0.30) / 100.0
-            return raw, int(raw >= 0.5)
+            return 0.5, 'Moderate'
 
     def generate_credit_score(self, farm_data):
         """
@@ -157,30 +162,23 @@ class VisualCreditScorer:
         """
         
         # Get intermediate ML predictions
-        predicted_ndvi = self.predict_ndvi(farm_data)
+        predicted_crop_health = self.predict_ndvi(farm_data)
         soil_score     = self.compute_soil_score(farm_data)
         water_score    = self.compute_water_score(farm_data)
-        farm_size      = float(farm_data.get('farm_size', 3.0) or 3.0)
-
-        ndvi_score = predicted_ndvi * 100
 
         # Final score from Credit Risk Classifier (repayment probability × 100)
         repay_prob, repay_label = self.predict_credit_risk(
-            ndvi_score, soil_score, water_score, farm_size
+            farm_data, predicted_crop_health, soil_score, water_score
         )
         final_score = round(repay_prob * 100, 1)
         
         # Risk category
-        risk_category = "Unknown"
-        for label, (low, high) in RISK_CATEGORIES.items():
-            if low <= final_score <= high:
-                risk_category = label
-                break
+        risk_category = repay_label
         
         # Generate recommendation
-        if final_score >= 70:
+        if risk_category == 'Low':
             recommendation = "APPROVE - Strong physical agricultural capacity."
-        elif final_score >= 45:
+        elif risk_category == 'Moderate':
             recommendation = "REVIEW - Marginal physical indicators."
         else:
             recommendation = "REJECT - Poor physical crop capacity."
@@ -197,14 +195,13 @@ class VisualCreditScorer:
             'repayment_probability':  round(repay_prob, 4),
 
             'components': {
-                'predicted_ndvi_score': round(ndvi_score, 1),
-                'water_score':          round(water_score, 1),
-                'soil_score':           round(soil_score, 1),
-                'farm_size':            farm_size,
+                'pred_crop_health':     predicted_crop_health,
+                'pred_water_depth':     water_score,
+                'pred_soil_q':          soil_score,
             },
             
             'evidence': {
-                'ml_predicted_ndvi': round(predicted_ndvi, 3),
+                'ml_predicted_crop_health': predicted_crop_health,
                 'actual_satellite_ndvi': round(farm_data.get('ndvi', 0), 3) if not pd.isna(farm_data.get('ndvi')) else None,
                 'soil_ph': farm_data.get('pH', None),
                 'nitrogen': farm_data.get('nitrogen_g_per_kg', None),
@@ -236,7 +233,7 @@ class VisualCreditScorer:
                 'heuristic_credit_score': score_result['heuristic_credit_score'],
                 'risk_category': score_result['risk_category'],
                 'recommendation': score_result['recommendation'],
-                'predicted_ndvi': score_result['evidence']['ml_predicted_ndvi'],
+                'predicted_ndvi': score_result['evidence']['ml_predicted_crop_health'],
                 'latitude': score_result['evidence']['coordinates']['lat'],
                 'longitude': score_result['evidence']['coordinates']['lon'],
             })

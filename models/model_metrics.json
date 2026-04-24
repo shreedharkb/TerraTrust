@@ -1,90 +1,335 @@
 {
-    "Model_A_NDVI": {
-        "training_time_seconds": 0.62,
-        "train_r2": 0.9532,
-        "test_r2": 0.8756,
-        "train_rmse": 0.0408,
-        "test_rmse": 0.0658,
-        "cv_5fold_mean": 0.8785,
-        "cv_5fold_std": 0.0033,
+    "_audit": {
+        "version": "v4_spatial_only",
+        "banned": [
+            "crop_health_ndvi",
+            "loan_risk_binary",
+            "loan_risk_category",
+            "credit_score",
+            "water_availability_score",
+            "soil_suitability_score",
+            "derived_soil_label"
+        ],
+        "splits": [
+            "spatial_GroupShuffleSplit_by_taluk"
+        ]
+    },
+    "Model_A_CropHealth": {
+        "spatial": {
+            "time_s": 0.3,
+            "train_accuracy": 0.9844,
+            "test_accuracy": 0.9683,
+            "train_test_gap": 0.0161,
+            "gap_verdict": "OK",
+            "precision": 0.9851,
+            "recall": 0.963,
+            "f1_score": 0.9739,
+            "confusion_matrix": [
+                [
+                    545,
+                    13
+                ],
+                [
+                    33,
+                    859
+                ]
+            ],
+            "cv_mean": 0.9496,
+            "cv_std": 0.0114,
+            "cv_scores": [
+                0.9426,
+                0.9529,
+                0.9703,
+                0.9433,
+                0.9387
+            ],
+            "n_train": 5380,
+            "n_test": 1450
+        },
+        "target": "crop_health (0=Stressed, 1=Healthy, ndvi_point_adj>=0.40)",
+        "features": [
+            "latitude",
+            "longitude",
+            "clay_pct",
+            "sand_pct",
+            "silt_pct",
+            "pH",
+            "nitrogen_g_per_kg",
+            "organic_carbon_dg_per_kg",
+            "bulk_density_cg_per_cm3",
+            "avg_monthly_rainfall_mm",
+            "max_temp_c",
+            "min_temp_c",
+            "avg_humidity_pct",
+            "avg_root_zone_wetness",
+            "soil_water_retention",
+            "aridity_index",
+            "soil_fertility_index",
+            "thermal_stress",
+            "vegetation_stress_index"
+        ],
+        "baseline": {
+            "majority_class": 1,
+            "baseline_accuracy": 0.6811
+        },
         "feature_importances": {
-            "clay_pct": 0.09029091894626617,
-            "sand_pct": 0.12400727719068527,
-            "pH": 0.15786142647266388,
-            "avg_monthly_rainfall_mm": 0.058103255927562714,
-            "avg_root_zone_wetness": 0.08163557201623917,
-            "groundwater_depth_m": 0.4881015717983246
-        }
+            "vegetation_stress_index": 0.4653,
+            "organic_carbon_dg_per_kg": 0.0638,
+            "avg_root_zone_wetness": 0.051,
+            "soil_fertility_index": 0.0396,
+            "latitude": 0.037,
+            "avg_humidity_pct": 0.0346,
+            "max_temp_c": 0.032,
+            "avg_monthly_rainfall_mm": 0.0303,
+            "bulk_density_cg_per_cm3": 0.0286,
+            "aridity_index": 0.0286,
+            "soil_water_retention": 0.0257,
+            "nitrogen_g_per_kg": 0.0247,
+            "longitude": 0.0218,
+            "thermal_stress": 0.0212,
+            "pH": 0.021,
+            "clay_pct": 0.0191,
+            "sand_pct": 0.0189,
+            "min_temp_c": 0.0184,
+            "silt_pct": 0.0182
+        },
+        "effective_samples": 147
     },
     "Model_B_Soil": {
-        "training_time_seconds": 0.88,
-        "train_accuracy": 0.9282,
-        "test_accuracy": 0.9271,
-        "test_precision": 0.9302,
-        "test_recall": 0.9271,
-        "test_f1_score": 0.906,
-        "cv_5fold_mean": 0.9281,
-        "cv_5fold_std": 0.0016,
-        "confusion_matrix": [
-            [
-                4009,
-                3
+        "spatial": {
+            "time_s": 0.81,
+            "train_accuracy": 0.9888,
+            "test_accuracy": 0.8841,
+            "train_test_gap": 0.1047,
+            "gap_verdict": "Moderate",
+            "precision": 0.8863,
+            "recall": 0.8841,
+            "f1_score": 0.8848,
+            "confusion_matrix": [
+                [
+                    429,
+                    71,
+                    0
+                ],
+                [
+                    50,
+                    426,
+                    19
+                ],
+                [
+                    0,
+                    28,
+                    427
+                ]
             ],
-            [
-                320,
-                96
-            ]
+            "cv_mean": 0.8707,
+            "cv_std": 0.0173,
+            "cv_scores": [
+                0.8404,
+                0.875,
+                0.8841,
+                0.8647,
+                0.8893
+            ],
+            "n_train": 5380,
+            "n_test": 1450
+        },
+        "target": "soil_quality (organic_carbon tertile: 0=Low/1=Med/2=High)",
+        "features": [
+            "clay_pct",
+            "sand_pct",
+            "silt_pct",
+            "pH",
+            "nitrogen_g_per_kg",
+            "bulk_density_cg_per_cm3",
+            "avg_monthly_rainfall_mm",
+            "max_temp_c",
+            "min_temp_c",
+            "avg_humidity_pct",
+            "avg_root_zone_wetness",
+            "latitude",
+            "longitude",
+            "aridity_index",
+            "thermal_stress",
+            "sand_clay_ratio",
+            "soil_water_retention",
+            "vegetation_stress_index"
         ],
+        "baseline": {
+            "majority_class": 1,
+            "baseline_accuracy": 0.3338
+        },
         "feature_importances": {
-            "pH": 0.33178676083095443,
-            "nitrogen_g_per_kg": 0.10299015996838881,
-            "clay_pct": 0.30432194582126537,
-            "sand_pct": 0.1361833281461003,
-            "silt_pct": 0.12471780523329103
-        }
+            "soil_water_retention": 0.3788,
+            "nitrogen_g_per_kg": 0.1114,
+            "bulk_density_cg_per_cm3": 0.1041,
+            "latitude": 0.0698,
+            "clay_pct": 0.069,
+            "pH": 0.0557,
+            "sand_clay_ratio": 0.0495,
+            "longitude": 0.0331,
+            "sand_pct": 0.0304,
+            "vegetation_stress_index": 0.0256,
+            "silt_pct": 0.0186,
+            "avg_humidity_pct": 0.0108,
+            "aridity_index": 0.0104,
+            "max_temp_c": 0.008,
+            "min_temp_c": 0.008,
+            "avg_monthly_rainfall_mm": 0.0077,
+            "thermal_stress": 0.0063,
+            "avg_root_zone_wetness": 0.0028
+        },
+        "effective_samples": 147
     },
     "Model_C_Water": {
-        "training_time_seconds": 0.76,
-        "train_r2": 0.9663,
-        "test_r2": 0.9595,
-        "train_rmse": 0.9109,
-        "test_rmse": 1.0042,
-        "cv_5fold_mean": 0.9583,
-        "cv_5fold_std": 0.0022,
-        "feature_importances": {
-            "avg_monthly_rainfall_mm": 0.050148725509643555,
-            "avg_root_zone_wetness": 0.0456399992108345,
-            "avg_humidity_pct": 0.06539826095104218,
-            "groundwater_depth_m": 0.8388130068778992
-        }
-    },
-    "Model_D_Credit_Risk": {
-        "training_time_seconds": 0.07,
-        "train_accuracy": 0.9298,
-        "test_accuracy": 0.9302,
-        "test_precision": 0.9312,
-        "test_recall": 0.9985,
-        "test_f1_score": 0.9637,
-        "cv_5fold_mean": 0.9299,
-        "cv_5fold_std": 0.0008,
-        "confusion_matrix": [
-            [
-                17,
-                303
+        "spatial": {
+            "time_s": 5.02,
+            "train_r2": 0.9861,
+            "test_r2": 0.8138,
+            "train_test_gap": 0.1723,
+            "gap_verdict": "Overfitting",
+            "rmse": 2.0365,
+            "mae": 1.3828,
+            "cv_mean": 0.7917,
+            "cv_std": 0.0961,
+            "cv_scores": [
+                0.8021,
+                0.9257,
+                0.6283,
+                0.8255,
+                0.7768
             ],
-            [
-                6,
-                4102
-            ]
+            "n_train": 5380,
+            "n_test": 1450
+        },
+        "target": "groundwater_depth_m",
+        "features": [
+            "avg_monthly_rainfall_mm",
+            "max_temp_c",
+            "min_temp_c",
+            "avg_humidity_pct",
+            "avg_root_zone_wetness",
+            "clay_pct",
+            "sand_pct",
+            "silt_pct",
+            "ndvi_annual_mean",
+            "latitude",
+            "longitude",
+            "aridity_index",
+            "thermal_stress",
+            "soil_water_retention",
+            "vegetation_stress_index",
+            "sand_clay_ratio"
         ],
         "feature_importances": {
-            "soil_suitability_score": 0.494980126619339,
-            "water_availability_score": 0.18059684336185455,
-            "predicted_ndvi": 0.32442301511764526
+            "latitude": 0.2543,
+            "vegetation_stress_index": 0.2278,
+            "longitude": 0.2039,
+            "aridity_index": 0.1137,
+            "avg_monthly_rainfall_mm": 0.0618,
+            "sand_pct": 0.0376,
+            "silt_pct": 0.0323,
+            "ndvi_annual_mean": 0.0238,
+            "min_temp_c": 0.015,
+            "soil_water_retention": 0.0111,
+            "max_temp_c": 0.0052,
+            "sand_clay_ratio": 0.0042,
+            "avg_humidity_pct": 0.0029,
+            "thermal_stress": 0.0027,
+            "avg_root_zone_wetness": 0.0021,
+            "clay_pct": 0.0017
         },
-        "class_names": {
-            "0": "Bad/High Risk",
-            "1": "Good/Low Risk"
-        }
+        "effective_samples": 147
+    },
+    "Model_D_Credit_Risk": {
+        "spatial": {
+            "time_s": 0.53,
+            "train_accuracy": 0.981,
+            "test_accuracy": 0.9814,
+            "train_test_gap": 0.0003,
+            "gap_verdict": "OK",
+            "precision": 0.9814,
+            "recall": 0.9814,
+            "f1_score": 0.9813,
+            "confusion_matrix": [
+                [
+                    440,
+                    0,
+                    7
+                ],
+                [
+                    0,
+                    496,
+                    3
+                ],
+                [
+                    9,
+                    8,
+                    487
+                ]
+            ],
+            "cv_mean": 0.9512,
+            "cv_std": 0.0114,
+            "cv_scores": [
+                0.9515,
+                0.9441,
+                0.9732,
+                0.9425,
+                0.9446
+            ],
+            "n_train": 5380,
+            "n_test": 1450
+        },
+        "target": "loan_risk_3class (High/Moderate/Low)",
+        "class_names": [
+            "High",
+            "Low",
+            "Moderate"
+        ],
+        "features": [
+            "pred_crop_health",
+            "pred_soil_q",
+            "pred_water_depth",
+            "aridity_index",
+            "sand_clay_ratio",
+            "thermal_stress",
+            "avg_monthly_rainfall_mm",
+            "avg_root_zone_wetness",
+            "soil_fertility_index",
+            "vegetation_stress_index"
+        ],
+        "baseline": {
+            "majority_class": 2,
+            "baseline_accuracy": 0.3586
+        },
+        "feature_importances": {
+            "pred_crop_health": 0.3246,
+            "pred_soil_q": 0.2995,
+            "pred_water_depth": 0.1779,
+            "vegetation_stress_index": 0.079,
+            "soil_fertility_index": 0.0261,
+            "avg_monthly_rainfall_mm": 0.0248,
+            "aridity_index": 0.0219,
+            "sand_clay_ratio": 0.0181,
+            "thermal_stress": 0.0162,
+            "avg_root_zone_wetness": 0.0118
+        },
+        "effective_samples": 147,
+        "note": "Hierarchical: uses A/B/C predictions as inputs."
+    },
+    "_pipeline_info": {
+        "steps": [
+            "1. Load CSV",
+            "2. Derive ndvi_point_adj (physics-informed disaggregation)",
+            "3. Select features (no banned cols)",
+            "4. Drop NaN",
+            "4a. Spatial: GroupShuffleSplit 80/20 by taluk",
+            "5. StandardScaler + balanced class weights",
+            "6. Train model",
+            "7. Evaluate spatial split",
+            "8. Cross-validation (spatial 5-fold)"
+        ],
+        "total_samples": 6830,
+        "effective_samples": 147
     }
 }

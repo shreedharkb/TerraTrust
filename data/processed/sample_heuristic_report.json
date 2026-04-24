@@ -1,0 +1,27 @@
+{
+  "point_id_yr": "CHI_000_2019",
+  "year": 2019,
+  "taluk": "Chikkodi",
+  "district": "Belagavi",
+  "heuristic_credit_score": 30.0,
+  "risk_category": "High",
+  "recommendation": "REJECT - Poor physical crop capacity.",
+  "repayment_probability": 0.3,
+  "components": {
+    "pred_crop_health": 0.0,
+    "pred_water_depth": 14.74003755399201,
+    "pred_soil_q": 0.0
+  },
+  "evidence": {
+    "ml_predicted_crop_health": 0.0,
+    "actual_satellite_ndvi": null,
+    "soil_ph": 7.4,
+    "nitrogen": 1.35,
+    "rainfall_mm": 2.695555555555556,
+    "root_zone_wetness": 0.64,
+    "coordinates": {
+      "lat": 16.51678258279039,
+      "lon": 74.64332518097048
+    }
+  }
+}
