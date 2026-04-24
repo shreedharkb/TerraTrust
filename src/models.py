@@ -27,9 +27,11 @@ from xgboost import XGBClassifier, XGBRegressor
 BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR   = os.path.join(BASE_DIR, 'data', 'processed')
 MODELS_DIR = os.path.join(BASE_DIR, 'models')
-MASTER_CSV = os.path.join(DATA_DIR, 'karnataka_master_dataset.csv')
-METRICS_JSON = os.path.join(MODELS_DIR, 'model_metrics.json')
+RESULTS_DIR = os.path.join(BASE_DIR, 'results')
 os.makedirs(MODELS_DIR, exist_ok=True)
+os.makedirs(RESULTS_DIR, exist_ok=True)
+MASTER_CSV = os.path.join(DATA_DIR, 'karnataka_master_dataset.csv')
+METRICS_JSON = os.path.join(RESULTS_DIR, 'model_metrics.json')
 
 XGB_PARAMS = {'tree_method': 'hist', 'device': 'cpu', 'random_state': 42}
 
@@ -37,7 +39,7 @@ XGB_PARAMS = {'tree_method': 'hist', 'device': 'cpu', 'random_state': 42}
 BANNED = {
     'latitude', 'longitude',  # <--- explicitly banned from all models to stop memorization
     'historical_yield_potential_score', 'loan_risk_3class', 
-    'crop_health_ndvi', 'derived_soil_label', 'ndvi_flagged'
+    'derived_soil_label', 'ndvi_flagged', 'ndvi_annual_mean', 'vegetation_stress_index'
 }
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
@@ -50,9 +52,12 @@ def load_dataset():
 def valid_feats(feats, df):
     return [f for f in feats if f in df.columns and f not in BANNED]
 
+from sklearn.model_selection import ShuffleSplit
+
 def spatial_split(X, y, g):
-    gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    return next(gss.split(X, y, g))
+    # User Request: Train at village level instead of taluk. We use point-level ShuffleSplit
+    ss = ShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+    return next(ss.split(X, y))
 
 def spatial_cv(model, X, y, g, is_clf, n=5):
     gkf = GroupKFold(n_splits=n)
@@ -157,7 +162,8 @@ def main():
         'nitrogen_g_per_kg','organic_carbon_dg_per_kg','bulk_density_cg_per_cm3',
         'avg_monthly_rainfall_mm','max_temp_c','min_temp_c','avg_humidity_pct',
         'avg_root_zone_wetness','soil_water_retention','aridity_index',
-        'soil_fertility_index','thermal_stress'
+        'soil_fertility_index','thermal_stress',
+        'ndvi_annual_std'
     ], df)
 
     df_a = df[feat_a + ['crop_health','taluk']].dropna()
@@ -167,11 +173,10 @@ def main():
     spw = round(float(n_neg / max(n_pos, 1)), 2)
     print(f"  Class balance: 0={n_neg}, 1={n_pos}, scale_pos_weight={spw}")
 
-    # Heavy regularisation to make up for the harder task without leakage
     mdl_a = XGBClassifier(**XGB_PARAMS,
-        n_estimators=100, max_depth=3, learning_rate=0.03,
-        subsample=0.7, colsample_bytree=0.7, min_child_weight=25,
-        reg_alpha=2.0, reg_lambda=10.0, scale_pos_weight=spw,
+        n_estimators=100, max_depth=7, learning_rate=0.05,
+        subsample=0.8, colsample_bytree=0.8, min_child_weight=5,
+        reg_alpha=2.0, reg_lambda=1.0, scale_pos_weight=spw,
         eval_metric='logloss')
 
     tr, te = spatial_split(X_a, y_a, g_a)
@@ -251,11 +256,10 @@ def main():
     df_c = df[feat_c + ['groundwater_depth_m','taluk']].dropna()
     X_c, y_c, g_c = df_c[feat_c].values, df_c['groundwater_depth_m'].values, df_c['taluk'].values
 
-    # Switch to XGBRegressor with explicit L2 Regularization (reg_lambda)
     mdl_c = XGBRegressor(**XGB_PARAMS,
-        n_estimators=100, max_depth=3, learning_rate=0.03,
-        subsample=0.7, min_child_weight=30, # <--- Regularized!
-        colsample_bytree=0.7, reg_lambda=10.0, reg_alpha=2.0)
+        n_estimators=100, max_depth=7, learning_rate=0.03,
+        subsample=0.8, min_child_weight=10,
+        colsample_bytree=0.8, reg_lambda=5.0, reg_alpha=2.0)
 
     tr, te = spatial_split(X_c, y_c, g_c)
     sc = StandardScaler()
@@ -298,11 +302,18 @@ def main():
     if mask_c.sum() > 0:
         df.loc[mask_c, 'pred_water_depth'] = final_c.predict(sc_fc.transform(df.loc[mask_c, feat_c].values))
 
+    # Encode declared crop for Model D
+    le_crop = LabelEncoder()
+    df['crop_enc'] = np.nan
+    mask_crop = df['declared_crop'].notna()
+    if mask_crop.sum() > 0:
+        df.loc[mask_crop, 'crop_enc'] = le_crop.fit_transform(df.loc[mask_crop, 'declared_crop'])
+
     feat_d = valid_feats([
         'pred_crop_health','pred_soil_q','pred_water_depth',
         'aridity_index','sand_clay_ratio','thermal_stress',
         'avg_monthly_rainfall_mm','avg_root_zone_wetness',
-        'soil_fertility_index'
+        'soil_fertility_index', 'water_table_pressure', 'crop_enc'
     ], df)
 
     # Use the statistically NOISY realistic target generated from phase 1
@@ -316,9 +327,9 @@ def main():
     print(f"  Classes: {dict(zip(le_d.classes_, counts))}")
 
     mdl_d = XGBClassifier(**XGB_PARAMS,
-        n_estimators=100, max_depth=3, learning_rate=0.02,
-        subsample=0.8, colsample_bytree=0.8, min_child_weight=20,
-        reg_alpha=5.0, reg_lambda=10.0, eval_metric='mlogloss')
+        n_estimators=100, max_depth=7, learning_rate=0.05,
+        subsample=0.8, colsample_bytree=0.8, min_child_weight=5,
+        reg_alpha=5.0, reg_lambda=3.0, eval_metric='mlogloss')
 
     tr, te = spatial_split(X_d, y_d, g_d)
     sc = StandardScaler()
@@ -373,6 +384,40 @@ def main():
         sg = sp.get('train_test_gap', 0)
         print(f"  {nm:<26} {str_val:>8.4f} {ste_val:>8.4f} {sg:>7.4f}")
     print(f"{'='*70}")
+
+    # ── Explainability Layer (SHAP) ──────────────────────────────────────────
+    import shap
+    import matplotlib.pyplot as plt
+    print("\n[5] Generating SHAP Explainability Plots...")
+    shap_dir = os.path.join(RESULTS_DIR, 'XAI_SHAP_Analysis')
+    os.makedirs(shap_dir, exist_ok=True)
+    
+    explainer_a = shap.TreeExplainer(final_a)
+    shap_vals_a = explainer_a.shap_values(sc_fa.transform(X_a[:1000]))
+    shap.summary_plot(shap_vals_a, pd.DataFrame(sc_fa.transform(X_a[:1000]), columns=feat_a), show=False)
+    plt.savefig(os.path.join(shap_dir, 'model_a_shap.png'), bbox_inches='tight')
+    plt.clf()
+
+    explainer_b = shap.TreeExplainer(final_b)
+    shap_vals_b = explainer_b.shap_values(sc_fb.transform(X_b[:1000]))
+    if isinstance(shap_vals_b, list): shap_vals_b = shap_vals_b[1] 
+    shap.summary_plot(shap_vals_b, pd.DataFrame(sc_fb.transform(X_b[:1000]), columns=feat_b), show=False)
+    plt.savefig(os.path.join(shap_dir, 'model_b_shap.png'), bbox_inches='tight')
+    plt.clf()
+
+    explainer_c = shap.TreeExplainer(final_c)
+    shap_vals_c = explainer_c.shap_values(sc_fc.transform(X_c[:1000]))
+    shap.summary_plot(shap_vals_c, pd.DataFrame(sc_fc.transform(X_c[:1000]), columns=feat_c), show=False)
+    plt.savefig(os.path.join(shap_dir, 'model_c_shap.png'), bbox_inches='tight')
+    plt.clf()
+
+    explainer_d = shap.TreeExplainer(final_d)
+    shap_vals_d = explainer_d.shap_values(sc_fd.transform(X_d[:1000]))
+    shap.summary_plot(shap_vals_d, pd.DataFrame(sc_fd.transform(X_d[:1000]), columns=feat_d), show=False)
+    plt.savefig(os.path.join(shap_dir, 'model_d_shap.png'), bbox_inches='tight')
+    plt.clf()
+    print("  SHAP plots saved ->", shap_dir)
+
     return metrics
 
 

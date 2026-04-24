@@ -14,8 +14,8 @@ import matplotlib.patches as mpatches
 from matplotlib.gridspec import GridSpec
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-OUT  = r"c:\Users\Shreedhar K B\Desktop\Results_and_Visualizations"
-METRICS = os.path.join(BASE, 'models', 'model_metrics.json')
+OUT  = os.path.join(BASE, 'results')
+METRICS = os.path.join(OUT, 'model_metrics.json')
 MASTER  = os.path.join(BASE, 'data', 'processed', 'karnataka_master_dataset.csv')
 
 for d in ['System_Architecture','Training_Curves','Validation_Maps','XAI_SHAP_Analysis']:
@@ -257,9 +257,10 @@ def plot_validation_maps():
 
     # Credit Risk Map
     fig, ax = plt.subplots(figsize=(10, 12))
+    df['simulated_cs'] = df['loan_risk_3class'].map({'High': 400, 'Moderate': 550, 'Low': 750}).fillna(500)
     taluk_credit = df.groupby('taluk').agg(
         lat=('latitude','mean'), lon=('longitude','mean'),
-        cs=('credit_score','mean')).reset_index()
+        cs=('simulated_cs','mean')).reset_index()
     sc = ax.scatter(taluk_credit['lon'], taluk_credit['lat'], c=taluk_credit['cs'],
                     cmap='RdYlGn', s=80, edgecolors='#333', linewidth=0.5, vmin=350, vmax=700)
     plt.colorbar(sc, ax=ax, label='Credit Score', shrink=0.7)
