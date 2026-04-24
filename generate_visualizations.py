@@ -1,5 +1,5 @@
 """
-TerraTrust Visualization Generator (Spatial Only)
+TerraTrust Visualization Generator
 =================================================
 Generates all figures for Results_and_Visualizations/
 """
@@ -127,7 +127,7 @@ def draw_model_architecture():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 2. TRAINING CURVES (Spatial Only)
+# 2. TRAINING CURVES
 # ═══════════════════════════════════════════════════════════════════════════
 
 def plot_training_curves():
@@ -140,7 +140,7 @@ def plot_training_curves():
     for key, title, is_clf in models:
         m = M[key]
         fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-        fig.suptitle(f'TerraTrust — {title} Training Curves (Spatial)', fontsize=14, fontweight='bold')
+        fig.suptitle(f'TerraTrust — {title} Training Curves', fontsize=14, fontweight='bold')
         metric = 'Accuracy' if is_clf else 'R²'
         s = m['spatial']
 
@@ -151,7 +151,7 @@ def plot_training_curves():
         x = np.arange(1); w = 0.3
         ax.bar(x-w/2, [tr_s], w, color=COLORS[0], label='Train', alpha=0.85)
         ax.bar(x+w/2, [te_s], w, color=COLORS[1], label='Test', alpha=0.85)
-        ax.set_xticks(x); ax.set_xticklabels(['Spatial Split'])
+        ax.set_xticks(x); ax.set_xticklabels(['Evaluation Split'])
         ax.set_ylabel(metric); ax.set_title(f'Train vs Test {metric}')
         ax.legend(); ax.set_ylim(0, 1.1)
         ax.text(0-w/2, tr_s+0.02, f'{tr_s:.3f}', ha='center', fontsize=10)
@@ -161,7 +161,7 @@ def plot_training_curves():
         ax = axes[1]
         cv_s = s.get('cv_scores',[])
         x_s = range(1, len(cv_s)+1)
-        ax.plot(x_s, cv_s, 'o-', color=COLORS[0], label=f'Spatial CV (mean={s["cv_mean"]:.3f})', lw=2)
+        ax.plot(x_s, cv_s, 'o-', color=COLORS[0], label=f'CV (mean={s["cv_mean"]:.3f})', lw=2)
         ax.axhline(s['cv_mean'], color=COLORS[0], ls='--', alpha=0.5)
         ax.set_xlabel('Fold'); ax.set_ylabel(metric)
         ax.set_title('Cross-Validation Scores (GroupKFold)'); ax.legend(fontsize=10)
@@ -170,7 +170,7 @@ def plot_training_curves():
         ax = axes[2]
         gap = s['train_test_gap']
         color_g = '#10B981' if gap < 0.08 else '#F59E0B' if gap < 0.15 else '#EF4444'
-        bar = ax.bar(['Spatial Split'], [gap], width=0.4, color=color_g, alpha=0.85)[0]
+        bar = ax.bar(['Evaluation Split'], [gap], width=0.4, color=color_g, alpha=0.85)[0]
         ax.axhline(0.08, color='#10B981', ls='--', alpha=0.6, label='Good (<0.08)')
         ax.axhline(0.15, color='#F59E0B', ls='--', alpha=0.6, label='Moderate (<0.15)')
         ax.set_ylabel('Train-Test Gap'); ax.set_title('Overfitting Analysis')
@@ -185,7 +185,7 @@ def plot_training_curves():
 
     # Combined summary dashboard
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle('TerraTrust — All Models Performance Summary (Spatial)', fontsize=15, fontweight='bold')
+    fig.suptitle('TerraTrust — All Models Performance Summary', fontsize=15, fontweight='bold')
     for idx, (key, title, is_clf) in enumerate(models):
         ax = axes[idx//2][idx%2]
         m = M[key]
@@ -196,7 +196,7 @@ def plot_training_curves():
         x = np.arange(1); w = 0.3
         ax.bar(x-w/2, [tr_s], w, color=COLORS[0], label='Train', alpha=0.85)
         ax.bar(x+w/2, [te_s], w, color=COLORS[1], label='Test', alpha=0.85)
-        ax.set_xticks(x); ax.set_xticklabels(['Spatial Split'])
+        ax.set_xticks(x); ax.set_xticklabels(['Evaluation Split'])
         ax.set_ylabel(metric); ax.set_title(title); ax.legend(fontsize=10)
         ax.set_ylim(0, 1.1)
     plt.tight_layout()
@@ -347,7 +347,7 @@ def plot_shap_analysis():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("TerraTrust — Visualization Generator (Spatial Only)")
+    print("TerraTrust — Visualization Generator")
     print(f"Output: {OUT}")
     print("=" * 60)
 

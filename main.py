@@ -54,12 +54,11 @@ def main():
     print(f"\n  ⏱️  Phase 2 total: {time.time()-p2:.1f}s")
 
     # -- Phase 3: Visualizations --
-    print("\n\n" + "#" * 60)
-    print("  PHASE 3: GENERATING RESULTS & VISUALIZATIONS")
-    print("#" * 60)
-    
-    p3 = time.time()
-    subprocess.run([sys.executable, "generate_visualizations.py"])
+    print("\n############################################################")
+    print("  PHASE 3: GENERATING RESULTS & VISUALIZATIONS (SKIPPED)")
+    print("############################################################")
+    # import generate_visualizations
+    # generate_visualizations.main()
     print(f"\n  ⏱️  Phase 3 total: {time.time()-p3:.1f}s")
     
     # -- Summary --

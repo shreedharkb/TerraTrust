@@ -3,13 +3,13 @@
   "year": 2019,
   "taluk": "Chikkodi",
   "district": "Belagavi",
-  "heuristic_credit_score": 30.0,
+  "heuristic_credit_score": 1.2,
   "risk_category": "High",
   "recommendation": "REJECT - Poor physical crop capacity.",
-  "repayment_probability": 0.3,
+  "repayment_probability": 0.0119,
   "components": {
     "pred_crop_health": 0.0,
-    "pred_water_depth": 14.74003755399201,
+    "pred_water_depth": 15.42843246459961,
     "pred_soil_q": 0.0
   },
   "evidence": {

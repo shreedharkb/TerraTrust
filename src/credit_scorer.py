@@ -142,15 +142,15 @@ class VisualCreditScorer:
             label_idx = model.predict(X_scaled)[0]
             label = artifacts['encoder'].inverse_transform([label_idx])[0]
             
-            # Map risk level to a probability score for legacy compatibility
-            if label == 'Low':
-                prob = 0.85
-            elif label == 'Moderate':
-                prob = 0.60
-            else:
-                prob = 0.30
+            # Phase 3 Fix: Use genuine predict_proba instead of hardcoded numbers
+            probas = model.predict_proba(X_scaled)[0]
+            classes = list(artifacts['encoder'].classes_)
+            
+            # Get the genuine probability that this is 'Low' risk (meaning High repayment probability)
+            low_idx = classes.index('Low')
+            prob_low = float(probas[low_idx])
                 
-            return prob, label
+            return prob_low, label
         except Exception as e:
             return 0.5, 'Moderate'
 
@@ -170,6 +170,8 @@ class VisualCreditScorer:
         repay_prob, repay_label = self.predict_credit_risk(
             farm_data, predicted_crop_health, soil_score, water_score
         )
+        
+        # Scale the genuine probability of Low Risk to a Visual Score (0-100)
         final_score = round(repay_prob * 100, 1)
         
         # Risk category

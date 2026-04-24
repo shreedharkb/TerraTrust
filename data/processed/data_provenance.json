@@ -45,11 +45,8 @@
     "ndvi_flagged"
   ],
   "heuristic_only_columns": [
-    "soil_suitability_score",
-    "water_availability_score",
-    "credit_score",
-    "loan_risk_category",
-    "crop_health_ndvi"
+    "historical_yield_potential_score",
+    "loan_risk_3class"
   ],
   "data_sources": {
     "boundaries": {
@@ -270,10 +267,7 @@
     "water_table_pressure",
     "thermal_stress",
     "sand_clay_ratio",
-    "soil_suitability_score",
-    "water_availability_score",
-    "crop_health_ndvi",
-    "credit_score",
-    "loan_risk_category"
+    "historical_yield_potential_score",
+    "loan_risk_3class"
   ]
 }

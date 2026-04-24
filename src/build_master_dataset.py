@@ -240,120 +240,44 @@ def add_interaction_features(master):
 
 
 # ══════════════════════════════════════════════════════════════════
-# LEGACY SCORING (kept for credit_scorer.py but NOT for ML training)
+# NEW NOISY TARGET GENERATION (FOR ML TRAINING)
 # ══════════════════════════════════════════════════════════════════
 
-def soil_suitability(row):
-    """Deterministic soil score — used ONLY for heuristic credit scoring, NOT ML training."""
-    score = 70.0
-    crop = str(row.get('declared_crop', 'Mixed/Urban'))
-    ph = row.get('pH', np.nan)
-    clay = row.get('clay_pct', np.nan)
-    n = row.get('nitrogen_g_per_kg', np.nan)
-
-    if pd.notna(ph):
-        if crop in ['Coffee', 'Pepper'] and (ph > 6.5 or ph < 4.5): score -= 25
-        elif crop in ['Sugarcane', 'Cotton'] and (ph < 6.0 or ph > 8.5): score -= 25
-        elif crop in ['Paddy', 'Rice'] and (ph < 5.0 or ph > 8.5): score -= 20
-        elif (ph < 5.5 or ph > 8.5): score -= 20
-        else: score += 10
-    if pd.notna(clay):
-        if crop in ['Cotton', 'Paddy', 'Sugarcane'] and clay < 30: score -= 20
-        elif crop in ['Groundnut'] and clay > 40: score -= 25
-        elif clay > 60 or clay < 10: score -= 15
-        else: score += 5
-    if pd.notna(n):
-        if n < 0.5: score -= 25
-        elif n > 1.2: score += 10
-    return max(0, min(100, round(score, 1)))
-
-
-def water_availability(row):
-    """Deterministic water score — used ONLY for heuristic credit scoring, NOT ML training."""
-    score = 50.0
-    crop = str(row.get('declared_crop', 'Mixed/Urban'))
-    rain = row.get('avg_monthly_rainfall_mm', np.nan)
-    gw  = row.get('groundwater_depth_m', np.nan)
-    min_temp = row.get('min_temp_c', np.nan)
-
-    if pd.notna(rain):
-        if crop in ['Paddy', 'Sugarcane', 'Coffee']:
-            if rain < 60: score -= 25
-            elif rain > 100: score += 20
-        elif crop in ['Jowar', 'Ragi', 'Maize', 'Groundnut']:
-            if rain > 80: score -= 10
-            elif 30 <= rain <= 60: score += 15
-            elif rain < 15: score -= 20
-        else:
-            if rain > 80: score += 15
-            elif rain < 20: score -= 15
-
-    if pd.notna(gw):
-        if gw < 5: score += 20
-        elif gw < 15: score += 5
-        elif gw > 25: score -= 20
-
-    ndvi = row.get('ndvi_annual_mean', np.nan)
-    if pd.notna(ndvi): score += ndvi * 10
-
-    temp = row.get('max_temp_c', 35.0)
-    if pd.notna(temp): score -= abs(temp - 30.0) * 1.5
-    if pd.notna(min_temp): score -= abs(min_temp - 20.0) * 0.8
-
-    return max(0, min(100, round(score, 1)))
-
-
-def credit_score_heuristic(row):
-    """Deterministic credit score — used ONLY for heuristic baseline, NOT ML training."""
-    base = 430.0
-
-    soil = row.get('soil_suitability_score', 50)
-    water = row.get('water_availability_score', 50)
-    ndvi = row.get('ndvi_annual_mean', 0.4)
-    gw = row.get('groundwater_depth_m', 14)
-    rain = row.get('avg_monthly_rainfall_mm', 0)
-    ph = row.get('pH', 7.0)
-    n = row.get('nitrogen_g_per_kg', 1.0)
-    wet = row.get('avg_root_zone_wetness', 0.5)
-    max_temp = row.get('max_temp_c', np.nan)
-    min_temp = row.get('min_temp_c', np.nan)
-
-    base += soil * 1.15
-    base += water * 0.85
-    base += ndvi * 95
-    base += wet * 45
-
-    if gw > 20: base -= 100
-    elif gw > 15: base -= 55
-    if soil < 50: base -= 100
-    elif soil < 65: base -= 45
-    if ndvi < 0.20: base -= 100
-    elif ndvi < 0.30: base -= 50
-    if water < 40: base -= 75
-    elif water < 55: base -= 30
-    if rain < 20: base -= 35
-    elif rain > 95: base += 10
-    if ph < 5.5 or ph > 8.5: base -= 30
-    elif 6.2 <= ph <= 7.8: base += 10
-    if n < 0.6: base -= 30
-    elif n > 1.2: base += 10
-    if pd.notna(max_temp):
-        if max_temp > 37: base -= 18
-        elif max_temp < 31: base += 6
-    if pd.notna(min_temp):
-        if min_temp < 14: base -= 10
-        elif 18 <= min_temp <= 23: base += 4
-
-    return max(300, min(900, round(base)))
-
-
-def ndvi_health(ndvi):
-    """NDVI-based crop health label."""
-    if ndvi >= 0.60: return 'Excellent'
-    elif ndvi >= 0.45: return 'Good'
-    elif ndvi >= 0.30: return 'Moderate'
-    elif ndvi >= 0.15: return 'Poor'
-    else: return 'Bare/Stressed'
+def generate_noisy_target(master):
+    """
+    Phase 1 Fix: Replace deterministic IF/THEN score with a noisy 
+    yield potential score based on realistic agronomic relationships.
+    """
+    np.random.seed(42) # Reproducibility
+    
+    # 1. Base Score (Using real physics)
+    # NDVI (proxy for biomass)
+    ndvi = master['ndvi_annual_mean'].fillna(0.4) 
+    
+    # Soil Carbon (fertility proxy)
+    soc = master['organic_carbon_dg_per_kg'].fillna(10.0)
+    soc_score = soc * 0.5 
+    
+    # Groundwater (Optimal is ~10m. Too deep = bad)
+    gw = master['groundwater_depth_m'].fillna(15.0)
+    gw_score = 30 - gw.clip(0, 30)
+    
+    base_score = (ndvi * 100) + soc_score + gw_score
+    
+    # 2. Add statistical noise (Simulating real-world variance: pests, floods)
+    noise = np.random.normal(loc=0.0, scale=4.0, size=len(master))
+    master['historical_yield_potential_score'] = base_score + noise
+    
+    # 3. Bin into probabilistic categories
+    q33 = master['historical_yield_potential_score'].quantile(0.33)
+    q66 = master['historical_yield_potential_score'].quantile(0.66)
+    
+    master['loan_risk_3class'] = pd.cut(
+        master['historical_yield_potential_score'],
+        bins=[-np.inf, q33, q66, np.inf],
+        labels=['High', 'Moderate', 'Low'] # Low yield = High risk
+    )
+    return master
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -485,18 +409,10 @@ def build_master_dataset():
     master = add_interaction_features(master)
 
     # ══════════════════════════════════════════════════════════════
-    # LEGACY SCORES (kept for credit_scorer heuristic, NOT for ML)
+    # GENERATE REALISTIC NOISY TARGET
     # ══════════════════════════════════════════════════════════════
-    print("\n    Computing legacy heuristic scores (for reference only)...")
-    master['soil_suitability_score']   = master.apply(soil_suitability, axis=1)
-    master['water_availability_score'] = master.apply(water_availability, axis=1)
-    master['crop_health_ndvi']         = master['ndvi_annual_mean'].apply(ndvi_health)
-    master['credit_score']             = master.apply(credit_score_heuristic, axis=1)
-    master['loan_risk_category'] = pd.cut(
-        master['credit_score'],
-        bins=[0, 441, 459, 533, 577, 900],
-        labels=['Very High Risk', 'High Risk', 'Moderate Risk', 'Low Risk', 'Very Low Risk']
-    )
+    print("\n    Generating noisy probabilistic target (loan_risk_3class)...")
+    master = generate_noisy_target(master)
 
     # ── Save ───────────────────────────────────────────────────
     os.makedirs(PROCESSED_DIR, exist_ok=True)
@@ -520,8 +436,7 @@ def build_master_dataset():
         'sand_clay_ratio', 'ndvi_flagged'
     ]
     heuristic_only_columns = [
-        'soil_suitability_score', 'water_availability_score',
-        'credit_score', 'loan_risk_category', 'crop_health_ndvi'
+        'historical_yield_potential_score', 'loan_risk_3class'
     ]
 
     # Update provenance
@@ -595,11 +510,10 @@ def build_master_dataset():
     print(f"\n  Heuristic-Only Columns (NOT for ML):")
     print(f"    {', '.join(heuristic_only_columns)}")
     print(f"\nCredit Score distribution:")
-    print(master['loan_risk_category'].value_counts().to_string())
+    print(master['loan_risk_3class'].value_counts().to_string())
     print(f"\nSample rows:")
-    sample_cols = ['taluk','year','ndvi_annual_mean','ndvi_flagged','groundwater_depth_m',
-                   'soil_water_retention','aridity_index','vegetation_stress_index',
-                   'credit_score','loan_risk_category']
+    sample_cols = ['taluk','year','ndvi_annual_mean','groundwater_depth_m',
+                   'aridity_index','historical_yield_potential_score','loan_risk_3class']
     print(master[sample_cols].head(6).to_string(index=False))
     print("=" * 65)
     return master
