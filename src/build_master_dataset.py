@@ -383,18 +383,17 @@ def build_master_dataset():
 
     # Remove duplicates
     before_dedup = len(master)
-    master = master.drop_duplicates()
+    master = master.drop_duplicates(subset=['taluk', 'year'], keep='first')
     row_dups_removed = before_dedup - len(master)
-    before_pid_dedup = len(master)
-    master = master.drop_duplicates(subset=['point_id_yr'], keep='first')
-    pid_dups_removed = before_pid_dedup - len(master)
-    print(f"    De-dup check | removed {row_dups_removed} full-row dups, {pid_dups_removed} point_id_yr dups")
+    print(f"    De-dup check | removed {row_dups_removed} duplicate taluk/year combinations")
 
-    # Drop rows missing critical physical data
+    # Drop rows missing critical physical data (but fill GW first)
+    master['groundwater_depth_m'] = master['groundwater_depth_m'].fillna(14.0)
+    
     before_drop = len(master)
     master = master.dropna(subset=['groundwater_depth_m', 'ndvi_annual_mean'])
     dropped_rows = before_drop - len(master)
-    print(f"    Dropped {dropped_rows} rows due to missing groundwater_depth_m/ndvi_annual_mean")
+    print(f"    Dropped {dropped_rows} rows due to missing critical data")
 
     # ══════════════════════════════════════════════════════════════
     # PHASE 1: DATA CLEANING

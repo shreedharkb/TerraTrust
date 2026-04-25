@@ -313,7 +313,7 @@ def main():
         'pred_crop_health','pred_soil_q','pred_water_depth',
         'aridity_index','sand_clay_ratio','thermal_stress',
         'avg_monthly_rainfall_mm','avg_root_zone_wetness',
-        'soil_fertility_index', 'water_table_pressure', 'crop_enc'
+        'soil_fertility_index', 'water_table_pressure'
     ], df)
 
     # Use the statistically NOISY realistic target generated from phase 1
@@ -384,39 +384,6 @@ def main():
         sg = sp.get('train_test_gap', 0)
         print(f"  {nm:<26} {str_val:>8.4f} {ste_val:>8.4f} {sg:>7.4f}")
     print(f"{'='*70}")
-
-    # ── Explainability Layer (SHAP) ──────────────────────────────────────────
-    import shap
-    import matplotlib.pyplot as plt
-    print("\n[5] Generating SHAP Explainability Plots...")
-    shap_dir = os.path.join(RESULTS_DIR, 'XAI_SHAP_Analysis')
-    os.makedirs(shap_dir, exist_ok=True)
-    
-    explainer_a = shap.TreeExplainer(final_a)
-    shap_vals_a = explainer_a.shap_values(sc_fa.transform(X_a[:1000]))
-    shap.summary_plot(shap_vals_a, pd.DataFrame(sc_fa.transform(X_a[:1000]), columns=feat_a), show=False)
-    plt.savefig(os.path.join(shap_dir, 'model_a_shap.png'), bbox_inches='tight')
-    plt.clf()
-
-    explainer_b = shap.TreeExplainer(final_b)
-    shap_vals_b = explainer_b.shap_values(sc_fb.transform(X_b[:1000]))
-    if isinstance(shap_vals_b, list): shap_vals_b = shap_vals_b[1] 
-    shap.summary_plot(shap_vals_b, pd.DataFrame(sc_fb.transform(X_b[:1000]), columns=feat_b), show=False)
-    plt.savefig(os.path.join(shap_dir, 'model_b_shap.png'), bbox_inches='tight')
-    plt.clf()
-
-    explainer_c = shap.TreeExplainer(final_c)
-    shap_vals_c = explainer_c.shap_values(sc_fc.transform(X_c[:1000]))
-    shap.summary_plot(shap_vals_c, pd.DataFrame(sc_fc.transform(X_c[:1000]), columns=feat_c), show=False)
-    plt.savefig(os.path.join(shap_dir, 'model_c_shap.png'), bbox_inches='tight')
-    plt.clf()
-
-    explainer_d = shap.TreeExplainer(final_d)
-    shap_vals_d = explainer_d.shap_values(sc_fd.transform(X_d[:1000]))
-    shap.summary_plot(shap_vals_d, pd.DataFrame(sc_fd.transform(X_d[:1000]), columns=feat_d), show=False)
-    plt.savefig(os.path.join(shap_dir, 'model_d_shap.png'), bbox_inches='tight')
-    plt.clf()
-    print("  SHAP plots saved ->", shap_dir)
 
     return metrics
 

@@ -134,7 +134,9 @@ class VisualCreditScorer:
             'sand_clay_ratio': farm_data.get('sand_clay_ratio', 0),
             'thermal_stress': farm_data.get('thermal_stress', 0),
             'avg_monthly_rainfall_mm': farm_data.get('avg_monthly_rainfall_mm', 0),
-            'avg_root_zone_wetness': farm_data.get('avg_root_zone_wetness', 0)
+            'avg_root_zone_wetness': farm_data.get('avg_root_zone_wetness', 0),
+            'soil_fertility_index': farm_data.get('soil_fertility_index', 0),
+            'water_table_pressure': farm_data.get('water_table_pressure', 0)
         }
         X = np.array([[feature_vals.get(f, 0) for f in features]])
         try:

@@ -15,6 +15,7 @@ TABULAR_DIR = os.path.join(DATA_DIR, "kgis_tabular")
 SATELLITE_DIR = os.path.join(DATA_DIR, "satellite")
 PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
+RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 
 # Create directories if they don't exist
 for d in [TABULAR_DIR, SATELLITE_DIR, PROCESSED_DIR, MODELS_DIR]:
