@@ -88,20 +88,32 @@ def spatial_cv(model, X, y, g, is_clf, n=5):
 
 def eval_split(model, Xtr, Xte, ytr, yte, cv_scores, is_clf, is_bin, sw_tr=None):
     t0 = time.time()
+    
+    is_xgb = 'XGB' in type(model).__name__
+    fit_kwargs = {}
+    if is_xgb:
+        fit_kwargs['eval_set'] = [(Xtr, ytr), (Xte, yte)]
+        fit_kwargs['verbose'] = False
+
     if sw_tr is not None and is_clf:
         try:
-            model.fit(Xtr, ytr, sample_weight=sw_tr)
+            model.fit(Xtr, ytr, sample_weight=sw_tr, **fit_kwargs)
         except TypeError:
-            model.fit(Xtr, ytr)
+            model.fit(Xtr, ytr, **fit_kwargs)
     else:
-        model.fit(Xtr, ytr)
+        model.fit(Xtr, ytr, **fit_kwargs)
     tt = time.time() - t0
+    
+    evals_result = None
+    if is_xgb and hasattr(model, 'evals_result'):
+        evals_result = model.evals_result()
+
     ptr, pte = model.predict(Xtr), model.predict(Xte)
     if is_clf:
         atr, ate = accuracy_score(ytr, ptr), accuracy_score(yte, pte)
         gap = abs(atr - ate)
         avg = 'binary' if is_bin else 'weighted'
-        return {
+        ret = {
             "time_s": round(tt, 2), "train_accuracy": round(float(atr), 4),
             "test_accuracy": round(float(ate), 4), "train_test_gap": round(float(gap), 4),
             "gap_verdict": "OK" if gap < 0.08 else ("Moderate" if gap < 0.15 else "Overfitting"),
@@ -113,10 +125,13 @@ def eval_split(model, Xtr, Xte, ytr, yte, cv_scores, is_clf, is_bin, sw_tr=None)
             "cv_scores": [round(float(s), 4) for s in cv_scores],
             "n_train": len(ytr), "n_test": len(yte),
         }
+        if evals_result:
+            ret['evals_result'] = evals_result
+        return ret
     else:
         r2tr, r2te = r2_score(ytr, ptr), r2_score(yte, pte)
         gap = abs(r2tr - r2te)
-        return {
+        ret = {
             "time_s": round(tt, 2), "train_r2": round(float(r2tr), 4), "test_r2": round(float(r2te), 4),
             "train_test_gap": round(float(gap), 4),
             "gap_verdict": "OK" if gap < 0.08 else ("Moderate" if gap < 0.15 else "Overfitting"),
@@ -126,6 +141,9 @@ def eval_split(model, Xtr, Xte, ytr, yte, cv_scores, is_clf, is_bin, sw_tr=None)
             "cv_scores": [round(float(s), 4) for s in cv_scores],
             "n_train": len(ytr), "n_test": len(yte),
         }
+        if evals_result:
+            ret['evals_result'] = evals_result
+        return ret
 
 def get_importances(model, feats):
     if hasattr(model, 'feature_importances_'):
@@ -265,9 +283,9 @@ def main():
     X_c, y_c, g_c = df_c[feat_c].values, df_c['groundwater_depth_m'].values, df_c['taluk'].values
 
     mdl_c = XGBRegressor(**XGB_PARAMS,
-        n_estimators=200, max_depth=5, learning_rate=0.04,
-        subsample=0.85, min_child_weight=10,
-        colsample_bytree=0.80, reg_lambda=2.0, reg_alpha=0.5,
+        n_estimators=200, max_depth=4, learning_rate=0.05,
+        subsample=0.85, min_child_weight=12,
+        colsample_bytree=0.85, reg_lambda=3.0, reg_alpha=1.0,
         gamma=0.1)
 
     tr, te = spatial_split(X_c, y_c, g_c)
@@ -337,8 +355,8 @@ def main():
     # Balanced regularization for 80-85% train, 75-82% test
     mdl_d = XGBClassifier(**XGB_PARAMS,
         n_estimators=150, max_depth=4, learning_rate=0.05,
-        subsample=0.75, colsample_bytree=0.7, min_child_weight=15,
-        reg_alpha=4.0, reg_lambda=5.0, gamma=0.5,
+        subsample=0.80, colsample_bytree=0.75, min_child_weight=12,
+        reg_alpha=2.5, reg_lambda=3.5, gamma=0.2,
         eval_metric='mlogloss')
 
     tr, te = spatial_split(X_d, y_d, g_d)

@@ -59,7 +59,7 @@ class VisualCreditScorer:
     def predict_ndvi(self, farm_data):
         """Predict NDVI from Ground Features using XGBoost."""
         if 'ndvi_predictor' not in self.models:
-            return farm_data.get('crop_health', 1)
+            raise ValueError("NDVI Predictor model not loaded.")
             
         artifacts = self.models['ndvi_predictor']
         model = artifacts['model']
@@ -71,14 +71,13 @@ class VisualCreditScorer:
             X_scaled = scaler.transform(X)
             pred = model.predict(X_scaled)[0]
             return float(np.clip(pred, 0, 1))
-        except:
-            return farm_data.get('crop_health', 1)
+        except Exception as e:
+            raise ValueError(f"Error predicting NDVI: {e}")
             
     def compute_soil_score(self, farm_data):
         """Use ML Classifier to determine soil suitability score."""
         if 'soil_classifier' not in self.models:
-            # Fallback if model missing
-            return 1.0
+            raise ValueError("Soil Classifier model not loaded.")
             
         artifacts = self.models['soil_classifier']
         model = artifacts['model']
@@ -90,13 +89,13 @@ class VisualCreditScorer:
             X_scaled = scaler.transform(X)
             pred = model.predict(X_scaled)[0]
             return float(pred)
-        except:
-            return 1.0
+        except Exception as e:
+            raise ValueError(f"Error computing soil score: {e}")
 
     def compute_water_score(self, farm_data):
         """Use ML Regressor to determine water availability score."""
         if 'water_regressor' not in self.models:
-            return 15.0
+            raise ValueError("Water Regressor model not loaded.")
             
         artifacts = self.models['water_regressor']
         model = artifacts['model']
@@ -108,8 +107,8 @@ class VisualCreditScorer:
             X_scaled = scaler.transform(X)
             pred = model.predict(X_scaled)[0]
             return float(pred)
-        except:
-            return 15.0
+        except Exception as e:
+            raise ValueError(f"Error computing water score: {e}")
         
     def predict_credit_risk(self, farm_data, pred_crop_health, pred_soil_q, pred_water_depth):
         """
@@ -117,8 +116,7 @@ class VisualCreditScorer:
         Returns (repay_probability [0-1], predicted_label).
         """
         if 'credit_risk_classifier' not in self.models:
-            # Fallback
-            return 0.5, 'Moderate'
+            raise ValueError("Credit Risk Classifier model not loaded.")
 
         artifacts = self.models['credit_risk_classifier']
         model    = artifacts['model']
@@ -154,7 +152,7 @@ class VisualCreditScorer:
                 
             return prob_low, label
         except Exception as e:
-            return 0.5, 'Moderate'
+            raise ValueError(f"Error predicting credit risk: {e}")
 
     def generate_credit_score(self, farm_data):
         """Generate the Visual Credit Score using hierarchical ML + geospatial blending."""
@@ -174,22 +172,7 @@ class VisualCreditScorer:
             ndvi_raw = 0.4
 
         rainfall = float(farm_data.get('avg_monthly_rainfall_mm', 80))
-        rainfall_norm = min(rainfall / 180.0, 1.0)
-
-        water_norm = float(np.clip((30.0 - water_score) / 30.0, 0.0, 1.0))
-
-        soil_norm = float(np.clip(soil_score / 2.0, 0.0, 1.0))
-
-        ndvi_norm = float(np.clip(ndvi_raw, 0.0, 1.0))
-
-        geo_index = (
-            0.35 * ndvi_norm +
-            0.25 * water_norm +
-            0.25 * soil_norm +
-            0.15 * rainfall_norm
-        )
-
-        final_score = round((0.55 * repay_prob + 0.45 * geo_index) * 100, 1)
+        final_score = round(repay_prob * 100, 1)
         final_score = max(5.0, min(98.0, final_score))
 
         if final_score >= 70:

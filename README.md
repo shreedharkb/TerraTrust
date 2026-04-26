@@ -11,6 +11,8 @@ Access to fair agricultural credit in rural India is often hampered by the lack 
 
 **TerraTrust** is an end-to-end Geospatial Intelligence Platform designed to solve this problem. It replaces arbitrary heuristic credit scoring with a purely data-driven, machine-learning-backed approach. By pulling live multispectral satellite imagery and correlating it with global soil and climate datasets, TerraTrust generates a verifiable, bias-free **Visual Credit Score** for any geographic region (Taluk) in Karnataka.
 
+**Final Master Dataset:** The complete, processed dataset used for training is available at `data/processed/karnataka_master_dataset.csv`.
+
 ---
 
 ## 🛠️ 2. Technology Stack

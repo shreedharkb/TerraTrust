@@ -387,11 +387,12 @@ def build_master_dataset():
     row_dups_removed = before_dedup - len(master)
     print(f"    De-dup check | removed {row_dups_removed} duplicate taluk/year combinations")
 
-    # Drop rows missing critical physical data (but fill GW first)
-    master['groundwater_depth_m'] = master['groundwater_depth_m'].fillna(14.0)
+   
+    gw_median = master['groundwater_depth_m'].median()
+    master['groundwater_depth_m'] = master['groundwater_depth_m'].fillna(gw_median)
     
     before_drop = len(master)
-    master = master.dropna(subset=['groundwater_depth_m', 'ndvi_annual_mean'])
+    master = master.dropna(subset=['ndvi_annual_mean'])
     dropped_rows = before_drop - len(master)
     print(f"    Dropped {dropped_rows} rows due to missing critical data")
 

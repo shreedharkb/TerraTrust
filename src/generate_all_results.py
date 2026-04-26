@@ -212,62 +212,27 @@ def generate_training_curves():
     with open(metrics_path, 'r') as f:
         metrics = json.load(f)
 
-    # Combined training curves for all 4 models
-    np.random.seed(42)
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    plt.subplots_adjust(hspace=0.35, wspace=0.3)
-
-    model_configs = [
-        ('Model_A_CropHealth', 'Model A: Crop Health (XGBoost)', True),
-        ('Model_B_Soil', 'Model B: Soil Quality (Random Forest)', True),
-        ('Model_C_Water', 'Model C: Water Availability (XGBoost)', False),
-        ('Model_D_Credit_Risk', 'Model D: Credit Risk (XGBoost)', True),
-    ]
-
-    for idx, (key, title, is_clf) in enumerate(model_configs):
-        ax = axes[idx // 2][idx % 2]
-        m = metrics.get(key, {}).get('spatial', {})
-
-        if is_clf:
-            train_final = m.get('train_accuracy', 0.85)
-            test_final = m.get('test_accuracy', 0.80)
-        else:
-            train_final = m.get('train_r2', 0.75)
-            test_final = m.get('test_r2', 0.70)
-
-        epochs = np.arange(1, 101)
-        train_curve = train_final - (train_final - 0.3) * np.exp(-epochs/12) + np.random.normal(0, 0.008, 100)
-        test_curve = test_final - (test_final - 0.25) * np.exp(-epochs/15) + np.random.normal(0, 0.012, 100)
-        train_curve = np.clip(train_curve, 0, 1)
-        test_curve = np.clip(test_curve, 0, 1)
-
-        ax.plot(epochs, train_curve, label='Train', color='#2563EB', linewidth=2)
-        ax.plot(epochs, test_curve, label='Validation', color='#F59E0B', linewidth=2)
-        ax.fill_between(epochs, train_curve, test_curve, alpha=0.1, color='#94A3B8')
-        ylabel = 'Accuracy' if is_clf else 'R² Score'
-        ax.set_title(title, fontsize=12, fontweight='bold')
-        ax.set_xlabel('Boosting Rounds'); ax.set_ylabel(ylabel)
-        ax.legend(loc='lower right'); ax.grid(alpha=0.3)
-        gap = m.get('train_test_gap', 0)
-        ax.text(0.98, 0.02, f'Gap: {gap:.4f}', transform=ax.transAxes,
-                ha='right', va='bottom', fontsize=9, color='#64748B',
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
-
-    plt.suptitle('TerraTrust — Model Training Performance (All 4 Models)', fontsize=14, fontweight='bold', y=1.01)
-    plt.savefig(os.path.join(CURVES_DIR, 'TerraTrust_Training_Curves_All.png'), bbox_inches='tight')
-    plt.close()
-
-    # Loss curves
+    # Real Learning Curves for Model D
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    epochs = np.arange(1, 101)
-    train_loss = 0.8 * np.exp(-epochs/15) + 0.12 + np.random.normal(0, 0.005, 100)
-    val_loss = 0.8 * np.exp(-epochs/15) + 0.18 + np.random.normal(0, 0.01, 100)
-
-    axes[0].plot(epochs, train_loss, label='Train Loss', color='#2563EB', linewidth=2)
-    axes[0].plot(epochs, val_loss, label='Val Loss', color='#EF4444', linewidth=2)
-    axes[0].set_title('Model D — Log Loss', fontweight='bold')
-    axes[0].set_xlabel('Boosting Rounds'); axes[0].set_ylabel('Log Loss')
-    axes[0].legend(); axes[0].grid(alpha=0.3)
+    
+    # Try to plot actual evals_result if available
+    m_d = metrics.get('Model_D_Credit_Risk', {}).get('spatial', {})
+    evals = m_d.get('evals_result', {})
+    
+    train_loss = evals.get('validation_0', {}).get('mlogloss', [])
+    val_loss = evals.get('validation_1', {}).get('mlogloss', [])
+    
+    if train_loss and val_loss:
+        epochs = np.arange(1, len(train_loss) + 1)
+        axes[0].plot(epochs, train_loss, label='Train Loss', color='#2563EB', linewidth=2)
+        axes[0].plot(epochs, val_loss, label='Val Loss', color='#EF4444', linewidth=2)
+        axes[0].set_title('Model D — Log Loss', fontweight='bold')
+        axes[0].set_xlabel('Boosting Rounds'); axes[0].set_ylabel('Log Loss')
+        axes[0].legend(); axes[0].grid(alpha=0.3)
+    else:
+        axes[0].text(0.5, 0.5, 'Training logs not available.\nPlease retrain with eval_set.',
+                     ha='center', va='center')
+        axes[0].set_title('Model D — Log Loss (Unavailable)')
 
     # Confusion matrix for Model D
     cm = metrics.get('Model_D_Credit_Risk', {}).get('spatial', {}).get('confusion_matrix', [[0]])
@@ -285,6 +250,13 @@ def generate_training_curves():
 
     # Model comparison bar chart
     fig, ax = plt.subplots(figsize=(10, 6))
+    
+    model_configs = [
+        ('Model_A_CropHealth', 'Model A: Crop Health (XGBoost)', True),
+        ('Model_B_Soil', 'Model B: Soil Quality (Random Forest)', True),
+        ('Model_C_Water', 'Model C: Water Availability (XGBoost)', False),
+        ('Model_D_Credit_Risk', 'Model D: Credit Risk (XGBoost)', True),
+    ]
     models_list = []
     for key, title, is_clf in model_configs:
         m = metrics.get(key, {}).get('spatial', {})
@@ -298,8 +270,8 @@ def generate_training_curves():
     ax.bar(x - width/2, comp_df['Train'], width, label='Train', color='#2563EB', alpha=0.8)
     ax.bar(x + width/2, comp_df['Test'], width, label='Test', color='#10B981', alpha=0.8)
     for i, row in comp_df.iterrows():
-        ax.text(i - width/2, row['Train'] + 0.01, f"{row['Train']:.2f}", ha='center', fontsize=9)
-        ax.text(i + width/2, row['Test'] + 0.01, f"{row['Test']:.2f}", ha='center', fontsize=9)
+        ax.text(i - width/2, row['Train'] + 0.01, f"{row['Train']:.3f}", ha='center', fontsize=9)
+        ax.text(i + width/2, row['Test'] + 0.01, f"{row['Test']:.3f}", ha='center', fontsize=9)
     ax.set_xticks(x); ax.set_xticklabels(comp_df['Model'])
     ax.set_ylabel('Score'); ax.set_title('Train vs Test Performance Comparison', fontweight='bold')
     ax.legend(); ax.grid(axis='y', alpha=0.3)
@@ -450,22 +422,7 @@ def generate_shap_plots():
 
     print("  [OK] Real SHAP plots generated")
 
-    # NDVI Feature Impact Curve (always generated)
-    fig, ax = plt.subplots(figsize=(12, 5), facecolor=bg_color)
-    ax.set_facecolor(bg_color)
-    ndvi_vals = np.linspace(0.1, 0.9, 100)
-    shap_impact = 1 / (1 + np.exp(-15 * (ndvi_vals - 0.45))) * 100
-    ax.fill_between(ndvi_vals, shap_impact, color="#FF8C42", alpha=0.3, label="AI Attention Score")
-    ax.plot(ndvi_vals, shap_impact, color="#FF6B1A", linewidth=3)
-    ax.axvspan(0.1, 0.35, color='#EF4444', alpha=0.1, label="High Risk Zone")
-    ax.axvspan(0.55, 0.9, color='#10B981', alpha=0.1, label="Low Risk Zone")
-    ax.set_title("SHAP: Feature Importance over NDVI Cycle", fontsize=15, fontweight='bold', color='#0F172A', pad=15)
-    ax.set_xlabel("Mean Annual NDVI (Crop Health)", fontweight='semibold')
-    ax.set_ylabel("AI Probability Contribution (SHAP Value)", fontweight='semibold')
-    ax.legend(frameon=True, facecolor='white', edgecolor='#E2E8F0'); ax.grid(alpha=0.4, linestyle='--')
-    plt.tight_layout()
-    plt.savefig(os.path.join(SHAP_DIR, "SHAP_NDVI_Importance_Curve.png"), bbox_inches='tight', facecolor=bg_color, dpi=300)
-    plt.close()
+
 
     # Feature correlation heatmap
     try:
