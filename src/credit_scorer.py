@@ -31,30 +31,30 @@ class VisualCreditScorer:
         path_ndvi = os.path.join(MODELS_DIR, "model_a_ndvi.pkl")
         if os.path.exists(path_ndvi):
             self.models['ndvi_predictor'] = joblib.load(path_ndvi)
-            print(f"  ✅ Loaded NDVI Predictor model")
+            print(f"  [+] Loaded NDVI Predictor model")
         else:
-            print(f"  ⚠️ NDVI Predictor model not found at {path_ndvi}")
+            print(f"  [!] NDVI Predictor model not found at {path_ndvi}")
 
         # Soil Classifier
         path_soil = os.path.join(MODELS_DIR, "model_b_soil.pkl")
         if os.path.exists(path_soil):
             self.models['soil_classifier'] = joblib.load(path_soil)
-            print(f"  ✅ Loaded Soil Classifier model")
+            print(f"  [+] Loaded Soil Classifier model")
         else:
-            print(f"  ⚠️ Soil Classifier model not found at {path_soil}")
+            print(f"  [!] Soil Classifier model not found at {path_soil}")
 
         # Water Regressor
         path_water = os.path.join(MODELS_DIR, "model_c_water.pkl")
         if os.path.exists(path_water):
             self.models['water_regressor'] = joblib.load(path_water)
-            print(f"  ✅ Loaded Water Regressor model")
+            print(f"  [+] Loaded Water Regressor model")
         # Credit Risk Classifier (final decision engine)
         path_credit = os.path.join(MODELS_DIR, "model_d_credit.pkl")
         if os.path.exists(path_credit):
             self.models['credit_risk_classifier'] = joblib.load(path_credit)
-            print(f"  ✅ Loaded Credit Risk Classifier model")
+            print(f"  [+] Loaded Credit Risk Classifier model")
         else:
-            print(f"  ⚠️ Credit Risk Classifier model not found at {path_credit}")
+            print(f"  [!] Credit Risk Classifier model not found at {path_credit}")
     
     def predict_ndvi(self, farm_data):
         """Predict NDVI from Ground Features using XGBoost."""
@@ -157,59 +157,70 @@ class VisualCreditScorer:
             return 0.5, 'Moderate'
 
     def generate_credit_score(self, farm_data):
-        """
-        Generate the complete Visual Credit Score with supporting evidence.
-        Final score = repayment probability (from Credit Risk Classifier) × 100.
-        Component models provide explainability.
-        """
-        
-        # Get intermediate ML predictions
-        predicted_crop_health = self.predict_ndvi(farm_data)
-        soil_score     = self.compute_soil_score(farm_data)
-        water_score    = self.compute_water_score(farm_data)
+        """Generate the Visual Credit Score using hierarchical ML + geospatial blending."""
 
-        # Final score from Credit Risk Classifier (repayment probability × 100)
+        predicted_crop_health = self.predict_ndvi(farm_data)
+        soil_score = self.compute_soil_score(farm_data)
+        water_score = self.compute_water_score(farm_data)
+
         repay_prob, repay_label = self.predict_credit_risk(
             farm_data, predicted_crop_health, soil_score, water_score
         )
-        
-        # Scale the genuine probability of Low Risk to a Visual Score (0-100)
-        final_score = round(repay_prob * 100, 1)
-        
-        # Risk category
-        risk_category = repay_label
-        
-        # Generate recommendation
-        if risk_category == 'Low':
-            recommendation = "APPROVE - Strong physical agricultural capacity."
-        elif risk_category == 'Moderate':
-            recommendation = "REVIEW - Marginal physical indicators."
+
+        ndvi_raw = farm_data.get('ndvi_annual_mean', farm_data.get('ndvi_point_adj', 0.4))
+        try:
+            ndvi_raw = float(ndvi_raw) if not pd.isna(ndvi_raw) else 0.4
+        except Exception:
+            ndvi_raw = 0.4
+
+        rainfall = float(farm_data.get('avg_monthly_rainfall_mm', 80))
+        rainfall_norm = min(rainfall / 180.0, 1.0)
+
+        water_norm = float(np.clip((30.0 - water_score) / 30.0, 0.0, 1.0))
+
+        soil_norm = float(np.clip(soil_score / 2.0, 0.0, 1.0))
+
+        ndvi_norm = float(np.clip(ndvi_raw, 0.0, 1.0))
+
+        geo_index = (
+            0.35 * ndvi_norm +
+            0.25 * water_norm +
+            0.25 * soil_norm +
+            0.15 * rainfall_norm
+        )
+
+        final_score = round((0.55 * repay_prob + 0.45 * geo_index) * 100, 1)
+        final_score = max(5.0, min(98.0, final_score))
+
+        if final_score >= 70:
+            risk_category = 'Low'
+            recommendation = "APPROVE — Strong satellite-verified agricultural capacity."
+        elif final_score >= 48:
+            risk_category = 'Moderate'
+            recommendation = "REVIEW — Marginal geospatial indicators; field verification advised."
         else:
-            recommendation = "REJECT - Poor physical crop capacity."
-        
+            risk_category = 'High'
+            recommendation = "REJECT — Poor crop health and water availability signals."
+
         result = {
             'point_id_yr': farm_data.get('point_id_yr', 'UNKNOWN'),
-            'year':        farm_data.get('year', 2023),
-            'taluk':       farm_data.get('taluk', 'Unknown'),
-            'district':    farm_data.get('district', 'Unknown'),
-
+            'year': farm_data.get('year', 2023),
+            'taluk': farm_data.get('taluk', 'Unknown'),
+            'district': farm_data.get('district', 'Unknown'),
             'heuristic_credit_score': final_score,
-            'risk_category':          risk_category,
-            'recommendation':         recommendation,
-            'repayment_probability':  round(repay_prob, 4),
-
+            'risk_category': risk_category,
+            'recommendation': recommendation,
+            'repayment_probability': round(repay_prob, 4),
             'components': {
-                'pred_crop_health':     predicted_crop_health,
-                'pred_water_depth':     water_score,
-                'pred_soil_q':          soil_score,
+                'pred_crop_health': predicted_crop_health,
+                'pred_water_depth': water_score,
+                'pred_soil_q': soil_score,
             },
-            
             'evidence': {
-                'ml_predicted_crop_health': predicted_crop_health,
-                'actual_satellite_ndvi': round(farm_data.get('ndvi', 0), 3) if not pd.isna(farm_data.get('ndvi')) else None,
+                'satellite_ndvi': round(ndvi_raw, 3),
                 'soil_ph': farm_data.get('pH', None),
-                'nitrogen': farm_data.get('nitrogen_g_per_kg', None),
-                'rainfall_mm': farm_data.get('avg_monthly_rainfall_mm', None),
+                'nitrogen_gkg': farm_data.get('nitrogen_g_per_kg', None),
+                'rainfall_mm': round(rainfall, 1),
                 'root_zone_wetness': farm_data.get('avg_root_zone_wetness', None),
                 'coordinates': {
                     'lat': farm_data.get('latitude', None),
@@ -217,7 +228,7 @@ class VisualCreditScorer:
                 }
             }
         }
-        
+
         return result
     
     def score_all_farms(self, farms_df):
@@ -237,18 +248,17 @@ class VisualCreditScorer:
                 'heuristic_credit_score': score_result['heuristic_credit_score'],
                 'risk_category': score_result['risk_category'],
                 'recommendation': score_result['recommendation'],
-                'predicted_ndvi': score_result['evidence']['ml_predicted_crop_health'],
+                'predicted_ndvi': score_result['components']['pred_crop_health'],
                 'latitude': score_result['evidence']['coordinates']['lat'],
                 'longitude': score_result['evidence']['coordinates']['lon'],
             })
         
         results_df = pd.DataFrame(results)
-        
-        # Save results
+
         results_path = os.path.join(PROCESSED_DIR, "heuristic_credit_scores.csv")
         results_df.to_csv(results_path, index=False)
-        print(f"\n  ✅ Scored {len(results_df)} temporal coordinates")
-        print(f"  💾 Saved to: {results_path}")
+        print(f"  Scored {len(results_df)} temporal coordinates")
+        print(f"  Saved to: {results_path}")
         
         return results_df
 
