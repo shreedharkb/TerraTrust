@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="assets/banner.png" alt="TerraTrust Banner" width="100%">
-</p>
-
 # 🛰️ TerraTrust: Geospatial Credit Intelligence for Rural Banking
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
