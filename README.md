@@ -9,6 +9,8 @@
 **Roll Number:** 23BCS126  
 **Institution:** Indian Institute of Information Technology (IIIT), Dharwad  
 
+![TerraTrust Geospatial Credit Intelligence](results_and_visualizations/Comparison_Maps/Comparison_NDVI_vs_Credit.png)
+
 ---
 
 ## 📖 1. Project Overview & Problem Statement
@@ -49,46 +51,8 @@ TerraTrust leverages a modern, scalable Python data science ecosystem.
 
 TerraTrust utilizes a **Stacked Hierarchical Architecture** to isolate environmental factors from economic ones, ensuring fairer credit assessments.
 
-```mermaid
-graph TD
-    subgraph Input Data
-        S[Satellite Imagery<br>Sentinel-2 / Landsat]
-        SO[Soil Grids<br>ISRIC 250m]
-        W[Water/Climate<br>NASA POWER/GRACE]
-    end
+![TerraTrust System Architecture](results_and_visualizations/System_Architecture/TerraTrust_Pipeline_Overview.png)
 
-    subgraph Level 1: Sub-Models
-        MA[Model A: Crop Health<br>XGBoost Classifier]
-        MB[Model B: Soil Quality<br>Random Forest]
-        MC[Model C: Water Availability<br>XGBoost Regressor]
-    end
-
-    subgraph Level 2: Meta-Learner
-        MD[Model D: Credit Risk<br>XGBoost Meta-Model]
-    end
-
-    S --> MA
-    SO --> MB
-    W --> MC
-
-    MA --> MD
-    MB --> MD
-    MC --> MD
-    
-    D[Demographics &<br>Loan History] --> MD
-    
-    MD --> F[Final Credit Decision<br>Low / Moderate / High Risk]
-
-    classDef input fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef model fill:#bbf,stroke:#333,stroke-width:2px;
-    classDef meta fill:#fbb,stroke:#333,stroke-width:2px;
-    classDef output fill:#bfb,stroke:#333,stroke-width:2px;
-    
-    class S,SO,W,D input;
-    class MA,MB,MC model;
-    class MD meta;
-    class F output;
-```
 
 ### Model Breakdown:
 - **Level 1 (Environmental Sub-Models):**
@@ -119,6 +83,8 @@ A core requirement for TerraTrust was building a model that generalizes well wit
 - **Training Benchmarks:** Train Accuracy is capped between 80%-90%, and Validation/Test Accuracy is targeted at 75%-85%.
 - **Train-Test Gap:** Strictly monitored to ensure it stays below 8-10%, proving the model generalizes effectively.
 - **Explainability:** SHAP validates the logic, ensuring that positive agricultural indicators (e.g., high NDVI, low groundwater depth) universally push the credit score up.
+
+![TerraTrust Model Interpretability via SHAP](results_and_visualizations/SHAP_Analysis/TerraTrust_SHAP_Summary.png)
 
 ---
 
