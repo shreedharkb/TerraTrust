@@ -44,10 +44,6 @@
     "sand_clay_ratio",
     "ndvi_flagged"
   ],
-  "heuristic_only_columns": [
-    "historical_yield_potential_score",
-    "loan_risk_3class"
-  ],
   "data_sources": {
     "boundaries": {
       "source": "KGIS (kgis.ksrsac.in)",
@@ -359,8 +355,6 @@
     "soil_fertility_index",
     "water_table_pressure",
     "thermal_stress",
-    "sand_clay_ratio",
-    "historical_yield_potential_score",
-    "loan_risk_3class"
+    "sand_clay_ratio"
   ]
 }

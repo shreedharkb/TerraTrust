@@ -3,14 +3,14 @@
   "year": 2019,
   "taluk": "Chikkodi",
   "district": "Belagavi",
-  "heuristic_credit_score": 5.0,
+  "heuristic_credit_score": 29.2,
   "risk_category": "High",
   "recommendation": "REJECT \u2014 Poor crop health and water availability signals.",
-  "repayment_probability": 0.0049,
+  "repayment_probability": 0.2919,
   "components": {
-    "pred_crop_health": 0.0,
-    "pred_water_depth": 15.833196640014648,
-    "pred_soil_q": 0.0
+    "pred_crop_health": 0.18589290976524353,
+    "pred_water_depth": 0.5634096908569336,
+    "pred_soil_q": 0.15672111282277704
   },
   "evidence": {
     "satellite_ndvi": 0.311,

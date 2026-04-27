@@ -102,13 +102,13 @@ if st.session_state.active_taluk and not st.session_state.show_results: state = 
 if st.session_state.active_taluk and st.session_state.show_results: state = 3
 
 if state == 1:
-    status_text = "📍 Awaiting Farm Selection"
+    status_text = "Awaiting Farm Selection"
     status_color = "#9CA3AF"
 elif state == 2:
-    status_text = "📡 Connecting to KGIS & Satellite..."
+    status_text = "Connecting to KGIS & Satellite..."
     status_color = "#FF6B1A"
 else:
-    status_text = "✅ Credit Intelligence Ready"
+    status_text = "Credit Intelligence Ready"
     status_color = "#16A34A"
 
 st.markdown(f"""<div class="brand-bar">
@@ -132,7 +132,7 @@ with left_col:
     st.markdown("""<div class="card-box">
     <div class="panel-label">EXPLORE</div>
     <div class="panel-title">Spatial Selection</div>
-    <div class="panel-desc">Click anywhere on the Karnataka map to auto-detect the nearest taluk.</div></div>""", unsafe_allow_html=True)
+    <div class="panel-desc">Click anywhere on the Karnataka map.</div></div>""", unsafe_allow_html=True)
 
     m = folium.Map(location=[15.3173,75.7139], zoom_start=7, tiles="CartoDB positron", control_scale=False)
     st.markdown('<div class="map-wrap">', unsafe_allow_html=True)
@@ -185,7 +185,7 @@ with left_col:
         
         # Determine Actions
         cred = taluk_credit.get(tk,{})
-        rc = cred.get("risk_category", row.get("loan_risk_3class","—"))
+        rc = cred.get("risk_category", "Unknown")
         if rc == "High":
             act1 = "Recommend rejection or reduced disbursement. High-risk indicators across multiple data sources."
             act3 = "If approved under exception, mandate monthly satellite monitoring and physical verification."
@@ -208,10 +208,10 @@ with left_col:
 
 with right_col:
     if st.session_state.active_taluk and not st.session_state.show_results:
-        bar = st.progress(0, text="Fetching KGIS + Satellite data...")
+        bar = st.progress(0, text="Loading pre-processed dataset...")
         for i in range(7):
             time.sleep(0.5)
-            labels = ["Connecting to KGIS...","Fetching groundwater...","Loading NDVI imagery...","Querying climate...","Running ML model...","Cross-validating...","Compiling report..."]
+            labels = ["Loading dataset...","Reading groundwater records...","Loading NDVI values...","Reading climate data...","Running ML inference...","Calculating credit score...","Compiling report..."]
             bar.progress((i+1)/7, text=labels[i])
         bar.empty()
         st.session_state.show_results = True
@@ -222,7 +222,7 @@ with right_col:
         row = taluk_data.get(tk,{})
         cred = taluk_credit.get(tk,{})
         cs = float(cred.get("heuristic_credit_score",0))
-        rc = cred.get("risk_category", row.get("loan_risk_3class","—"))
+        rc = cred.get("risk_category", "Unknown")
         rec = cred.get("recommendation","No recommendation available.")
         dn = taluk_district.get(tk,"—")
         bc = "badge-low" if rc=="Low" else "badge-mod" if rc=="Moderate" else "badge-high"
@@ -241,7 +241,7 @@ with right_col:
         ndvi=row.get("ndvi_annual_mean","—"); gw=row.get("groundwater_depth_m","—")
         rain=row.get("avg_monthly_rainfall_mm","—"); sf=row.get("soil_fertility_index","—")
         wp=row.get("water_table_pressure","—"); ai=row.get("aridity_index","—")
-        vs=row.get("vegetation_stress_index","—"); yp=row.get("historical_yield_potential_score","—")
+        vs=row.get("vegetation_stress_index","—"); yp="—"
 
         st.markdown(f"""<div class="card-box">
         <div class="panel-label">SATELLITE & KGIS DATA</div>
@@ -345,9 +345,9 @@ with right_col:
         # Buttons: PDF Download + Reset without emojis
         btn1, btn2 = st.columns(2)
         with btn1:
-            st.download_button("Download Report (PDF)", data=pdf_bytes, file_name=f"TerraTrust_{tk}_Report.pdf", mime="application/pdf")
+            st.download_button("Download Report", data=pdf_bytes, file_name=f"TerraTrust_{tk}_Report.pdf", mime="application/pdf")
         with btn2:
-            if st.button("Reset & Select New Location"):
+            if st.button("Reset"):
                 st.session_state.active_taluk = None
                 st.session_state.show_results = False
                 st.session_state.map_key += 1
@@ -362,4 +362,4 @@ with right_col:
         <strong style="color:#FF6B1A;">Credit Intelligence Report</strong>.</div>
         </div>""", unsafe_allow_html=True)
 
-st.markdown('<div class="footer-text">TerraTrust v1.0 · KGIS + Satellite Imagery (NDVI) + ML Models · 240 Taluks · Karnataka</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer-text">TerraTrust v1.0 · KGIS + Satellite Imagery (NDVI) + ML Models · 240 Taluks · Karnataka<br><span style="font-size:0.75rem;color:#D4A574;">Note: Credit scores are derived from physics-informed heuristic models using satellite + soil + climate data. No real loan repayment ground truth was used.</span></div>', unsafe_allow_html=True)

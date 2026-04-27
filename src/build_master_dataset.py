@@ -240,47 +240,6 @@ def add_interaction_features(master):
 
 
 # ══════════════════════════════════════════════════════════════════
-# NEW NOISY TARGET GENERATION (FOR ML TRAINING)
-# ══════════════════════════════════════════════════════════════════
-
-def generate_noisy_target(master):
-    """
-    Phase 1 Fix: Replace deterministic IF/THEN score with a noisy 
-    yield potential score based on realistic agronomic relationships.
-    """
-    np.random.seed(42) # Reproducibility
-    
-    # 1. Base Score (Using real physics)
-    # NDVI (proxy for biomass)
-    ndvi = master['ndvi_annual_mean'].fillna(0.4) 
-    
-    # Soil Carbon (fertility proxy)
-    soc = master['organic_carbon_dg_per_kg'].fillna(10.0)
-    soc_score = soc * 0.5 
-    
-    # Groundwater (Optimal is ~10m. Too deep = bad)
-    gw = master['groundwater_depth_m'].fillna(15.0)
-    gw_score = 30 - gw.clip(0, 30)
-    
-    base_score = (ndvi * 100) + soc_score + gw_score
-    
-    # 2. Add statistical noise (Simulating real-world variance: pests, floods)
-    noise = np.random.normal(loc=0.0, scale=4.0, size=len(master))
-    master['historical_yield_potential_score'] = base_score + noise
-    
-    # 3. Bin into probabilistic categories
-    q33 = master['historical_yield_potential_score'].quantile(0.33)
-    q66 = master['historical_yield_potential_score'].quantile(0.66)
-    
-    master['loan_risk_3class'] = pd.cut(
-        master['historical_yield_potential_score'],
-        bins=[-np.inf, q33, q66, np.inf],
-        labels=['High', 'Moderate', 'Low'] # Low yield = High risk
-    )
-    return master
-
-
-# ══════════════════════════════════════════════════════════════════
 # MAIN BUILDER
 # ══════════════════════════════════════════════════════════════════
 
@@ -412,7 +371,7 @@ def build_master_dataset():
     # GENERATE REALISTIC NOISY TARGET
     # ══════════════════════════════════════════════════════════════
     print("\n    Generating noisy probabilistic target (loan_risk_3class)...")
-    master = generate_noisy_target(master)
+    # master = generate_noisy_target(master)
 
     # ── Save ───────────────────────────────────────────────────
     os.makedirs(PROCESSED_DIR, exist_ok=True)
@@ -423,7 +382,7 @@ def build_master_dataset():
         pd.DataFrame(audit_log).to_csv(AUDIT_LOG_CSV, index=False)
         print(f"    Audit log saved: {AUDIT_LOG_CSV} ({len(audit_log)} entries)")
 
-    # Define which columns are ML training features vs heuristic-only
+    # Define which columns are ML training features
     ml_training_features = [
         'clay_pct', 'sand_pct', 'silt_pct', 'pH', 'nitrogen_g_per_kg',
         'organic_carbon_dg_per_kg', 'bulk_density_cg_per_cm3',
@@ -434,9 +393,6 @@ def build_master_dataset():
         'soil_water_retention', 'aridity_index', 'vegetation_stress_index',
         'soil_fertility_index', 'water_table_pressure', 'thermal_stress',
         'sand_clay_ratio', 'ndvi_flagged'
-    ]
-    heuristic_only_columns = [
-        'historical_yield_potential_score', 'loan_risk_3class'
     ]
 
     # Update provenance
@@ -465,7 +421,6 @@ def build_master_dataset():
             ]
         },
         "ml_training_features": ml_training_features,
-        "heuristic_only_columns": heuristic_only_columns,
         "data_sources": {
             "boundaries": {
                 "source": "KGIS (kgis.ksrsac.in)",
@@ -507,13 +462,9 @@ def build_master_dataset():
     print(f"  Years:    {sorted(master['year'].unique())}")
     print(f"\n  ML Training Features ({len(ml_training_features)}):")
     print(f"    {', '.join(ml_training_features)}")
-    print(f"\n  Heuristic-Only Columns (NOT for ML):")
-    print(f"    {', '.join(heuristic_only_columns)}")
-    print(f"\nCredit Score distribution:")
-    print(master['loan_risk_3class'].value_counts().to_string())
     print(f"\nSample rows:")
     sample_cols = ['taluk','year','ndvi_annual_mean','groundwater_depth_m',
-                   'aridity_index','historical_yield_potential_score','loan_risk_3class']
+                   'aridity_index']
     print(master[sample_cols].head(6).to_string(index=False))
     print("=" * 65)
     return master
