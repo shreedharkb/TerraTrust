@@ -5,122 +5,162 @@
 [![XGBoost](https://img.shields.io/badge/ML-XGBoost-orange.svg)](https://xgboost.readthedocs.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Author:** Shreedhar K B  
-**Roll Number:** 23BCS126  
-**Institution:** Indian Institute of Information Technology (IIIT), Dharwad  
+Shreedhar K B  
+23BCS126  
+ML Course Project  
+Indian Institute of Information Technology (IIIT), Dharwad
 
-![TerraTrust Geospatial Credit Intelligence](results_and_visualizations/Comparison_Maps/Comparison_NDVI_vs_Credit.png)
+
 
 ---
 
-## 📖 1. Project Overview & Problem Statement
+## 📌 Overview
 
-Access to fair agricultural credit in rural India is often hampered by the lack of formal financial histories, verifiable land data, and localized environmental risk assessments. Traditional banking models rely heavily on static paper trails, which structurally disadvantage smallholder farmers and expose lenders to uncalculated systemic risks.
+Access to fair agricultural credit in rural India is limited by sparse financial history, weak land documentation, and missing localized environmental risk assessments. Traditional lending pipelines struggle to verify risk for smallholder farmers, leading to both exclusion and systemic exposure.
 
-**TerraTrust** is an end-to-end Geospatial Intelligence Platform designed to solve this problem. It replaces arbitrary heuristic credit scoring with a purely data-driven, machine-learning-backed approach. By pulling live multispectral satellite imagery and correlating it with global soil and climate datasets, TerraTrust generates a verifiable, bias-free **Visual Credit Score** for any geographic region (Taluk) in Karnataka.
+**TerraTrust** is an end-to-end geospatial intelligence platform that replaces heuristic credit scoring with a machine-learning-driven **Visual Credit Score**. It fuses multispectral satellite imagery with global soil and climate datasets to produce transparent, verifiable risk assessments at the taluk level in Karnataka.
 
 > [!TIP]
-> **Final Master Dataset:** The complete, processed dataset used for training is available at `data/processed/karnataka_master_dataset.csv`.
+> **Master Dataset:** data/processed/karnataka_master_dataset.csv
 
 ---
 
-## ✨ 2. Key Features
+## ✨ Key Features
 
-- **🗺️ Interactive Spatial Dashboard:** A premium, single-page Streamlit application that allows loan officers to click anywhere on the map of Karnataka and instantly receive an AI-driven credit risk assessment.
-- **🔍 Explainable AI (XAI):** Utilizing SHAP to ensure the AI's decision-making process is transparent, legally compliant, and easily understandable via beeswarm and feature-impact visualizations.
-- **📄 Automated PDF Reporting:** Instant, single-click generation of immutable PDF credit reports tailored for physical audit trails.
-- **⚡ Ultra-Fast Inference:** The entire predictive pipeline runs in under 200 milliseconds, bypassing traditional GIS calculation latency.
-
----
-
-## 🛠️ 3. Technology Stack
-
-TerraTrust leverages a modern, scalable Python data science ecosystem.
-
-| Component | Technologies Used |
-| :--- | :--- |
-| **Core & Data Science** | `Python 3.10+`, `pandas`, `numpy`, `scikit-learn`, `joblib` |
-| **Geospatial & Satellite** | `geopandas`, `shapely`, `pyproj`, `rasterio`, `pystac-client` |
-| **Frontend & Mapping** | `streamlit`, `folium`, `streamlit-folium`, `matplotlib`, `seaborn` |
-| **Explainable AI** | `shap` (SHapley Additive exPlanations) |
-| **External APIs** | Microsoft Planetary Computer, ISRIC SoilGrids, NASA POWER/GRACE-FO |
+- **🗺️ Interactive Geo-Dashboard:** Streamlit app for map-first credit assessment at taluk granularity.
+- **🔍 Explainable AI (XAI):** SHAP-based interpretations for legally compliant, human-auditable decisions.
+- **📄 Automated PDF Reports:** One-click export of printable credit reports for field audits.
+- **⚡ Fast Inference:** End-to-end prediction in under 200 ms for real-time decision support.
 
 ---
 
-## 🧠 4. Machine Learning Architecture & Logic
+## 🧠 Machine Learning Architecture
 
-TerraTrust utilizes a **Stacked Hierarchical Architecture** to isolate environmental factors from economic ones, ensuring fairer credit assessments.
+TerraTrust uses a **stacked hierarchical pipeline** that separates environmental signals from economic ones to reduce bias and improve robustness.
 
 ![TerraTrust System Architecture](results_and_visualizations/System_Architecture/TerraTrust_Pipeline_Overview.png)
 
-
-### Model Breakdown:
-- **Level 1 (Environmental Sub-Models):**
-  - **Model A (Crop Health):** XGBoost Classifier analyzing historical NDVI variance.
-  - **Model B (Soil Quality):** Random Forest Classifier handling static soil composition grids.
-  - **Model C (Water Availability):** XGBoost Regressor mapping GRACE-FO anomaly data.
-- **Level 2 (Meta-Learner):**
-  - **Model D (Credit Risk Classifier):** An overarching XGBoost model that ingests the localized predictions of Models A, B, and C alongside demographic and loan history data.
-
----
-
-## 🛰️ 5. Data Pulling and Preprocessing
-
-TerraTrust relies heavily on live and historical remote sensing data rather than static, unverified tabular inputs. 
-
-- **Geospatial & Satellite Data Extraction**: 
-  - Uses the **Microsoft Planetary Computer STAC API** to fetch multispectral imagery from **Sentinel-2 L2A** (10m) and **Landsat Collection 2** (30m). 
-  - Dynamically calculates the NDVI (Normalized Difference Vegetation Index) formula `(NIR - RED) / (NIR + RED)` within the bounding box of each taluk.
-- **Global Environmental Datasets**: Integrates tier-1 scientific APIs including ISRIC SoilGrids, NASA POWER, and NASA GRACE-FO.
-- **Preprocessing Pipeline**: Handles exact spatial joins via geographic strings, missing data imputation, and complex physics feature engineering.
+### Model Flow
+- **Level 1 (Environmental Sub-Models)**
+   - Crop Health: XGBoost classifier over NDVI variance
+   - Soil Quality: Random Forest classifier over static soil grids
+   - Water Availability: XGBoost regressor over GRACE-FO anomalies
+- **Level 2 (Meta-Learner)**
+   - Credit Risk: XGBoost classifier combining environmental predictions with demographic and loan signals
 
 ---
 
-## 📊 6. Accuracy and Validation
+## 🛰️ Data Pipeline
 
-A core requirement for TerraTrust was building a model that generalizes well without succumbing to overfitting. 
-
-- **Training Benchmarks:** Train Accuracy is capped between 80%-90%, and Validation/Test Accuracy is targeted at 75%-85%.
-- **Train-Test Gap:** Strictly monitored to ensure it stays below 8-10%, proving the model generalizes effectively.
-- **Explainability:** SHAP validates the logic, ensuring that positive agricultural indicators (e.g., high NDVI, low groundwater depth) universally push the credit score up.
-
-![TerraTrust Model Interpretability via SHAP](results_and_visualizations/SHAP_Analysis/TerraTrust_SHAP_Summary.png)
+- **Satellite Imagery:** Microsoft Planetary Computer STAC API, Sentinel-2 L2A (10 m), Landsat C2 (30 m)
+- **Indexing:** NDVI computed as `(NIR - RED) / (NIR + RED)` per taluk
+- **Environmental Sources:** ISRIC SoilGrids, NASA POWER, NASA GRACE-FO
+- **Preprocessing:** Spatial joins, missing-value handling, and physics-based feature engineering
 
 ---
 
-## 🚀 7. Installation & Setup
+## 📊 Model Performance & Explainability
 
-To run this project locally, follow these steps:
+- **Targeted generalization:** Train accuracy capped at 80-90%, validation/test at 75-85%
+- **Overfitting control:** Train-test gap constrained to under 8-10%
+- **Interpretability:** SHAP summary plots confirm that agronomic signals drive score changes
 
-1. **Clone the repository:**
+
+
+---
+
+## 🛠️ Tech Stack
+
+| Component | Technologies |
+| :--- | :--- |
+| **Core & Data** | Python 3.10+, pandas, numpy, scikit-learn, joblib |
+| **Geospatial** | geopandas, shapely, pyproj, rasterio, pystac-client |
+| **Frontend** | streamlit, folium, streamlit-folium, matplotlib, seaborn |
+| **Explainability** | shap |
+| **External APIs** | Planetary Computer, SoilGrids, NASA POWER/GRACE-FO |
+
+---
+
+## 🚀 Quickstart
+
+1. **Clone the repository**
+    ```bash
+    git clone https://github.com/yourusername/TerraTrust.git
+    cd TerraTrust
+    ```
+
+2. **Create and activate a virtual environment**
+    ```bash
+    python -m venv .venv
+    # Windows
+    .venv\Scripts\activate
+    # Linux/Mac
+    source .venv/bin/activate
+    ```
+
+3. **Install dependencies**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4. **Run the app**
+    ```bash
+    streamlit run app.py
+    ```
+
+---
+
+## 🧪 Reproducibility
+
+- **Build the master dataset**
    ```bash
-   git clone https://github.com/yourusername/TerraTrust.git
-   cd TerraTrust
+   python -m src.build_master_dataset
    ```
-
-2. **Set up a virtual environment:**
+- **Train models and generate metrics**
    ```bash
-   python -m venv .venv
-   # Windows
-   .venv\Scripts\activate
-   # Linux/Mac
-   source .venv/bin/activate
+   python -m src.generate_all_results
    ```
-
-3. **Install Dependencies:**
+- **Fetch real NDVI (optional)**
    ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Run the TerraTrust Dashboard:**
-   ```bash
-   streamlit run app.py
+   python -m src.fetch_real_ndvi
    ```
 
 ---
 
-## 📄 8. Report Generation Engine
+## 📁 Repository Structure
 
-The TerraTrust dashboard provides stakeholders with the ability to instantly generate formal, print-ready PDF credit reports.
-- **Technology Stack:** Powered by `fpdf2`, allowing precise programmatic layout of text and cells.
-- **String Sanitization:** A custom `cln()` layer aggressively strips or replaces non-standard Unicode characters to prevent font rendering crashes.
+```
+.
+├─ app.py
+├─ src/
+│  ├─ build_master_dataset.py
+│  ├─ credit_scorer.py
+│  ├─ fetch_real_ndvi.py
+│  ├─ generate_all_results.py
+│  ├─ llm_reporter.py
+│  └─ models.py
+├─ data/
+│  ├─ raw/
+│  ├─ processed/
+│  └─ kgis_tabular/
+├─ results/
+└─ results_and_visualizations/
+```
+
+---
+
+## 📄 Report Generation
+
+The dashboard can export PDF credit reports built with `fpdf2`. A sanitization layer ensures robust font rendering for all fields.
+
+---
+
+## 📚 Documentation
+
+- Project procedure and execution guide: Project_Procedure_and_Execution_Guide.md
+
+---
+
+## ✅ License
+
+This project is licensed under the MIT License. See LICENSE for details.

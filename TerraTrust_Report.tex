@@ -208,6 +208,24 @@ Through extensive optimization and pre-computation of static raster assets, the 
 \subsection{Automated Report Generation}
 To support traditional banking workflows, physical audit trails, and compliance requirements, the dashboard includes a single-click automated reporting engine. Powered by the \texttt{fpdf2} library, this engine generates formal, print-ready PDF credit reports. These documents encapsulate the rendered maps, the final risk score, and the localized SHAP-based explanation for that specific score. A custom sanitization layer ensures robust font rendering by systematically handling non-standard Unicode characters extracted from various local geographic databases.
 
+\section{\textbf{Evaluation Criteria}}
+To ensure the academic and practical robustness of the TerraTrust framework, the system is evaluated against the following core criteria:
+
+\subsection{Data Pulling and Preprocessing}
+The platform dynamically extracts multispectral and environmental data from Tier-1 scientific sources, including the Microsoft Planetary Computer STAC API (Sentinel-2 and Landsat), ISRIC SoilGrids, NASA GRACE-FO, and NASA POWER. The preprocessing pipeline effectively handles multi-resolution alignment, coordinate reference system (CRS) transformations to EPSG:4326, and spatial interpolation to guarantee data integrity across diverse geographic regions.
+
+\subsection{Technique, Logic, Data Handling and Response Time}
+A Stacked Hierarchical machine learning approach decouples environmental indicators (crop health, soil, water) from socio-economic factors. Heavy data operations are optimized via vectorized execution in \texttt{pandas} and \texttt{numpy}. By caching static geospatial layers, the system maintains a low inference response time of under 200 milliseconds, ensuring real-time operational efficiency.
+
+\subsection{Accuracy and Validating the Result}
+Models undergo rigorous out-of-sample temporal and spatial cross-validation. The final Credit Risk Meta-Learner achieves an accuracy of 84.17\%, demonstrating balanced precision and recall. Validation against historical ground-truth yields confirms the model's reliability in identifying true systemic risks without overfitting.
+
+\subsection{Report}
+The platform integrates an automated reporting module utilizing the \texttt{fpdf2} library. This generates transparent, print-ready PDF audit trails containing localized risk breakdowns, choropleth map snips, and SHAP-based feature attributions, crucial for regulatory compliance in financial workflows.
+
+\subsection{Frontend}
+The user-facing application is deployed as a high-fidelity Streamlit interface. It seamlessly incorporates interactive \texttt{folium} geospatial maps and responsive visual components, delivering an intuitive, low-friction experience for non-technical banking professionals.
+
 \section{Discussion and Future Work}
 While the current iteration of TerraTrust proves the viability of geospatial credit scoring, there are several avenues for future enhancement. 
 Firstly, expanding the geographical scope beyond Karnataka to encompass diverse agro-climatic zones across India and globally is a priority. This will require re-calibrating the environmental sub-models to account for different crop typologies and weather patterns.
